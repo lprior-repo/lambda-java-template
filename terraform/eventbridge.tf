@@ -14,8 +14,7 @@ resource "aws_cloudwatch_event_rule" "crud_events" {
   event_pattern = jsonencode({
     source = ["lambda.${local.function_base_name}"]
     detail-type = [
-      "User Created", "User Updated", "User Deleted",
-      "Post Created", "Post Updated", "Post Deleted"
+      "Product Created", "Product Updated", "Product Deleted"
     ]
   })
 

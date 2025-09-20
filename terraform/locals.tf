@@ -10,41 +10,34 @@ locals {
   actual_namespace   = local.namespace != "" ? local.namespace : local.environment
   function_base_name = "${local.project_name}-${local.actual_namespace}"
 
-  # Lambda functions configuration for Java template
+  # Lambda functions configuration for GraalVM Java product service
   lambda_functions = {
-    health = {
-      name       = "${local.function_base_name}-health"
-      source_dir = "../build/health.zip"
-      runtime    = "java21"
-      handler    = "com.example.Handler::handleRequest"
-      routes     = [{ path = "/health", method = "GET", auth = false }]
-    }
-    users = {
-      name       = "${local.function_base_name}-users"
-      source_dir = "../build/users.zip"
-      runtime    = "java21"
-      handler    = "com.example.Handler::handleRequest"
-      routes     = [{ path = "/users", method = "ANY", auth = true }]
-    }
-    posts = {
-      name       = "${local.function_base_name}-posts"
-      source_dir = "../build/posts.zip"
-      runtime    = "java21"
-      handler    = "com.example.Handler::handleRequest"
-      routes     = [{ path = "/posts", method = "ANY", auth = true }]
+    product_service = {
+      name       = "${local.function_base_name}-product-service"
+      source_dir = "../product-service/target/product-service.zip"
+      runtime    = "provided.al2"
+      handler    = "not-used-for-native"
+      routes = [
+        { path = "/health", method = "GET", auth = false },
+        { path = "/products", method = "GET", auth = true },
+        { path = "/products", method = "POST", auth = true },
+        { path = "/products/{id}", method = "GET", auth = true },
+        { path = "/products/{id}", method = "PUT", auth = true },
+        { path = "/products/{id}", method = "DELETE", auth = true }
+      ]
     }
     authorizer = {
       name       = "${local.function_base_name}-authorizer"
-      source_dir = "../build/authorizer.zip"
-      runtime    = "java21"
-      handler    = "com.example.Handler::handleRequest"
+      source_dir = "../product-service/target/authorizer.zip"
+      runtime    = "provided.al2"
+      handler    = "not-used-for-native"
       routes     = []
     }
     event_processor = {
       name       = "${local.function_base_name}-event-processor"
-      source_dir = "../build/event-processor.zip"
-      runtime    = "java21"
-      handler    = "com.example.Handler::handleRequest"
+      source_dir = "../product-service/target/event-processor.zip"
+      runtime    = "provided.al2"
+      handler    = "not-used-for-native"
       routes     = []
     }
   }

@@ -11,11 +11,8 @@ terraform {
     }
   }
 
-  backend "s3" {
-    # Configuration provided via backend-config
-    # bucket = "your-terraform-state-bucket"
-    # key    = "lambda-java-template/terraform.tfstate"
-    # region = "us-east-1"
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
 

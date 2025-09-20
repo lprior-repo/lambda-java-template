@@ -1,6 +1,6 @@
 # DynamoDB Tables
-resource "aws_dynamodb_table" "users" {
-  name         = "${local.function_base_name}-users"
+resource "aws_dynamodb_table" "products" {
+  name         = "${local.function_base_name}-products"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
 
@@ -10,52 +10,13 @@ resource "aws_dynamodb_table" "users" {
   }
 
   attribute {
-    name = "email"
+    name = "name"
     type = "S"
   }
 
   global_secondary_index {
-    name            = "email-index"
-    hash_key        = "email"
-    projection_type = "ALL"
-  }
-
-  server_side_encryption {
-    enabled = true
-  }
-
-  point_in_time_recovery {
-    enabled = true
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_dynamodb_table" "posts" {
-  name         = "${local.function_base_name}-posts"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "id"
-  range_key    = "created_at"
-
-  attribute {
-    name = "id"
-    type = "S"
-  }
-
-  attribute {
-    name = "created_at"
-    type = "S"
-  }
-
-  attribute {
-    name = "user_id"
-    type = "S"
-  }
-
-  global_secondary_index {
-    name            = "user-posts-index"
-    hash_key        = "user_id"
-    range_key       = "created_at"
+    name            = "name-index"
+    hash_key        = "name"
     projection_type = "ALL"
   }
 

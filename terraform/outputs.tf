@@ -1,16 +1,6 @@
-output "health_lambda_function_arn" {
-  description = "ARN of the Health Lambda function"
-  value       = module.lambda_functions["health"].lambda_function_arn
-}
-
-output "users_lambda_function_arn" {
-  description = "ARN of the Users Lambda function"
-  value       = module.lambda_functions["users"].lambda_function_arn
-}
-
-output "posts_lambda_function_arn" {
-  description = "ARN of the Posts Lambda function"
-  value       = module.lambda_functions["posts"].lambda_function_arn
+output "product_service_lambda_function_arn" {
+  description = "ARN of the Product Service Lambda function"
+  value       = module.lambda_functions["product_service"].lambda_function_arn
 }
 
 output "event_processor_lambda_function_arn" {
@@ -28,24 +18,14 @@ output "health_endpoint" {
   value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/health"
 }
 
-output "users_endpoint" {
-  description = "Users endpoint URL"
-  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/users"
+output "products_endpoint" {
+  description = "Products endpoint URL"
+  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/products"
 }
 
-output "posts_endpoint" {
-  description = "Posts endpoint URL"
-  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/posts"
-}
-
-output "users_table_name" {
-  description = "Name of the Users DynamoDB table"
-  value       = aws_dynamodb_table.users.name
-}
-
-output "posts_table_name" {
-  description = "Name of the Posts DynamoDB table"
-  value       = aws_dynamodb_table.posts.name
+output "products_table_name" {
+  description = "Name of the Products DynamoDB table"
+  value       = aws_dynamodb_table.products.name
 }
 
 output "audit_logs_table_name" {

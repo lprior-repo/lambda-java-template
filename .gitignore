@@ -100,3 +100,28 @@ terraform/.terraform.tfstate.lock.info
 # AWS
 .aws-sam/
 samconfig.toml
+
+# GraalVM Native Image Build Artifacts
+build/
+*.zip
+bootstrap
+product-service
+*-native.zip
+native-config/
+
+# GraalVM Native Image specific
+*.so
+*.dylib
+*.dll
+graal_isolate.h
+graal_isolate_dynamic.h
+*.o
+*.obj
+
+# Native Image Reports
+reports/
+svm_err_*.md
+
+# Lambda deployment packages
+lambda-*.zip
+function.zip

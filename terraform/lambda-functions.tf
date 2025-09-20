@@ -17,14 +17,12 @@ module "lambda_functions" {
   memory_size = 512
 
   environment_variables = {
-    ENVIRONMENT      = local.environment
-    NODE_ENV         = "production"
-    LOG_LEVEL        = "INFO"
-    USERS_TABLE_NAME = aws_dynamodb_table.users.name
-    POSTS_TABLE_NAME = aws_dynamodb_table.posts.name
-    AUDIT_TABLE_NAME = aws_dynamodb_table.audit_logs.name
-    EVENT_BUS_NAME   = aws_cloudwatch_event_bus.app_events.name
-    AWS_REGION       = local.aws_region
+    ENVIRONMENT        = local.environment
+    LOG_LEVEL          = "INFO"
+    PRODUCTS_TABLE_NAME = aws_dynamodb_table.products.name
+    AUDIT_TABLE_NAME   = aws_dynamodb_table.audit_logs.name
+    EVENT_BUS_NAME     = aws_cloudwatch_event_bus.app_events.name
+    AWS_REGION         = local.aws_region
   }
 
   # CloudWatch Logs
@@ -49,10 +47,8 @@ module "lambda_functions" {
         "dynamodb:Scan"
       ]
       resources = [
-        aws_dynamodb_table.users.arn,
-        "${aws_dynamodb_table.users.arn}/*",
-        aws_dynamodb_table.posts.arn,
-        "${aws_dynamodb_table.posts.arn}/*",
+        aws_dynamodb_table.products.arn,
+        "${aws_dynamodb_table.products.arn}/*",
         aws_dynamodb_table.audit_logs.arn,
         "${aws_dynamodb_table.audit_logs.arn}/*"
       ]
@@ -86,7 +82,6 @@ module "api_key_authorizer" {
 
   environment_variables = {
     ENVIRONMENT = local.environment
-    NODE_ENV    = "production"
     LOG_LEVEL   = "INFO"
     AWS_REGION  = local.aws_region
   }
@@ -117,7 +112,6 @@ module "event_processor" {
 
   environment_variables = {
     ENVIRONMENT      = local.environment
-    NODE_ENV         = "production"
     LOG_LEVEL        = "INFO"
     AUDIT_TABLE_NAME = aws_dynamodb_table.audit_logs.name
     AWS_REGION       = local.aws_region
