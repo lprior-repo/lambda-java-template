@@ -1,0 +1,186 @@
+name: 🚀 Continuous Integration
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'lambda-templates/lambda-java-template/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'lambda-templates/lambda-java-template/**'
+      - '.github/workflows/ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "17"
+  TERRAFORM_VERSION: '1.6.0'
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      functions: ${{ steps.changes.outputs.functions }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed functions
+        id: changes
+        run: |
+          # Get list of all function directories
+          FUNCTIONS=$(find src -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | jq -R -s -c 'split("\n")[:-1]')
+          echo "functions=$FUNCTIONS" >> $GITHUB_OUTPUT
+          echo "Detected functions: $FUNCTIONS"
+
+  build:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        function: ${{ fromJson(needs.detect-changes.outputs.functions) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'corretto'
+          cache: maven
+
+      - name: Run tests
+        run: |
+          cd src/${{ matrix.function }}
+          mvn test
+
+      - name: Build function package
+        run: |
+          cd src/${{ matrix.function }}
+          mvn clean package
+
+      - name: Copy artifacts to build directory
+        run: |
+          mkdir -p build
+          cp src/${{ matrix.function }}/target/${{ matrix.function }}-lambda.jar build/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.function }}-lambda-java
+          path: build/${{ matrix.function }}-lambda.jar
+          retention-days: 30
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'corretto'
+          cache: maven
+
+      - name: Run checkstyle
+        run: mvn checkstyle:check
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'corretto'
+          cache: maven
+
+      - name: Run OWASP dependency check
+        run: mvn org.owasp:dependency-check-maven:check
+
+      - name: Run dependency scan
+        uses: actions/dependency-review-action@v3
+        if: github.event_name == 'pull_request'
+
+  # 🏗️ Infrastructure Validation
+  infrastructure:
+    name: 🏗️ Infrastructure Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: 🔧 Terraform Init
+        working-directory: terraform
+        run: terraform init -backend=false
+
+      - name: ✅ Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: 🎨 Terraform Format Check
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+
+      - name: 🔍 TFLint Security Scan
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: 🔍 Run TFLint
+        working-directory: terraform
+        run: |
+          tflint --init
+          tflint --recursive --config=../.tflint.hcl
+
+      - name: 🛡️ Checkov Security Scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform
+          framework: terraform
+          output_format: sarif
+          output_file_path: reports/checkov-results.sarif
+          quiet: true
+          soft_fail: false
+
+      - name: 📊 Upload Security Scan Results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: reports/checkov-results.sarif
+
+      - name: 💰 Infrastructure Cost Estimate
+        uses: infracost/actions/setup@v2
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: 💰 Generate Cost Estimate
+        run: |
+          cd terraform
+          infracost breakdown --path . \
+            --format json \
+            --out-file /tmp/infracost.json
+          infracost output --path /tmp/infracost.json \
+            --format table \
+            --out-file /tmp/infracost.txt
+
+      - name: 💰 Upload Cost Analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: infrastructure-cost-analysis-java
+          path: /tmp/infracost.*
+          retention-days: 30

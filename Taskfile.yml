@@ -1,0 +1,429 @@
+version: '3'
+
+# Serverless Acceleration Platform - Java Template
+# Velocity First: Ship with Confidence & Discipline
+
+vars:
+  PROJECT_NAME: lambda-java-template
+  AWS_REGION: us-east-1
+  ENVIRONMENT: dev
+  JAVA_VERSION: 17
+  MAVEN_OPTS: -Xmx2g
+
+env:
+  AWS_REGION: "{{.AWS_REGION}}"
+  MAVEN_OPTS: "{{.MAVEN_OPTS}}"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list-all
+
+  # 🚀 Velocity First: Build & Package
+  deps:
+    desc: Download Maven dependencies
+    cmds:
+      - mvn dependency:resolve dependency:resolve-sources
+    sources:
+      - pom.xml
+
+  compile:
+    desc: Compile Java sources
+    deps: [deps]
+    cmds:
+      - mvn compile
+    sources:
+      - src/main/**/*.java
+      - pom.xml
+    generates:
+      - target/classes/**
+
+  build:
+    desc: Build and package Java Lambda functions
+    deps: [compile]
+    cmds:
+      - mvn package -DskipTests
+    sources:
+      - src/main/**/*.java
+      - pom.xml
+    generates:
+      - target/*.jar
+
+  package:
+    desc: Package Lambda functions for deployment
+    deps: [build]
+    cmds:
+      - mkdir -p build
+      - cp target/hello-lambda.jar build/
+      - cp target/users-lambda.jar build/
+      - echo "✅ Lambda JARs ready: build/hello-lambda.jar, build/users-lambda.jar"
+    sources:
+      - target/*.jar
+    generates:
+      - build/*.jar
+
+  # 🧪 Test-First: Build with Quality
+  test:
+    desc: Run all tests with coverage
+    deps: [compile]
+    cmds:
+      - mvn test jacoco:report
+      - echo "📊 Coverage report: target/site/jacoco/index.html"
+
+  test:unit:
+    desc: Run unit tests only
+    deps: [compile]
+    cmds:
+      - mvn test -Dtest="**/*Test"
+
+  test:integration:
+    desc: Run integration tests
+    deps: [compile]
+    cmds:
+      - mvn test -Dtest="**/*IT"
+
+  test:watch:
+    desc: Run tests in watch mode for TDD
+    deps: [compile]
+    cmds:
+      - |
+        if command -v watchexec >/dev/null 2>&1; then
+          watchexec -e java,xml -- mvn test-compile test
+        else
+          echo "⚠️  Install watchexec for watch mode: brew install watchexec"
+          echo "📋 Run 'mvn test' manually after changes"
+        fi
+
+  test:coverage:
+    desc: Generate detailed test coverage report
+    deps: [test]
+    cmds:
+      - mvn jacoco:report
+      - echo "📊 Coverage report: target/site/jacoco/index.html"
+      - |
+        if command -v open >/dev/null 2>&1; then
+          open target/site/jacoco/index.html
+        fi
+
+  # 📊 Observability First: Ship with Insight
+  logs:
+    desc: Tail Lambda function logs
+    cmds:
+      - aws logs tail /aws/lambda/{{.PROJECT_NAME}}-hello --follow
+
+  logs:hello:
+    desc: Get hello function logs with JSON formatting
+    cmds:
+      - echo "📋 Latest log streams for hello function:"
+      - aws logs describe-log-streams --log-group-name /aws/lambda/{{.PROJECT_NAME}}-hello --order-by LastEventTime --descending --max-items 5
+      - echo "📝 Recent structured log events:"
+      - aws logs get-log-events --log-group-name /aws/lambda/{{.PROJECT_NAME}}-hello --log-stream-name $(aws logs describe-log-streams --log-group-name /aws/lambda/{{.PROJECT_NAME}}-hello --order-by LastEventTime --descending --max-items 1 --query 'logStreams[0].logStreamName' --output text) --limit 50
+
+  logs:users:
+    desc: Get users function logs with JSON formatting
+    cmds:
+      - echo "📋 Latest log streams for users function:"
+      - aws logs describe-log-streams --log-group-name /aws/lambda/{{.PROJECT_NAME}}-users --order-by LastEventTime --descending --max-items 5
+      - echo "📝 Recent structured log events:"
+      - aws logs get-log-events --log-group-name /aws/lambda/{{.PROJECT_NAME}}-users --log-stream-name $(aws logs describe-log-streams --log-group-name /aws/lambda/{{.PROJECT_NAME}}-users --order-by LastEventTime --descending --max-items 1 --query 'logStreams[0].logStreamName' --output text) --limit 50
+
+  xray:
+    desc: View X-Ray traces and service map
+    cmds:
+      - echo "🔍 X-Ray Service Map: https://{{.AWS_REGION}}.console.aws.amazon.com/xray/home?region={{.AWS_REGION}}#/service-map"
+      - echo "📊 X-Ray Traces: https://{{.AWS_REGION}}.console.aws.amazon.com/xray/home?region={{.AWS_REGION}}#/traces"
+      - echo "⚡ Performance Insights: https://{{.AWS_REGION}}.console.aws.amazon.com/lambda/home?region={{.AWS_REGION}}#/functions"
+
+  metrics:
+    desc: View CloudWatch metrics dashboard
+    cmds:
+      - echo "📊 CloudWatch Dashboard: https://{{.AWS_REGION}}.console.aws.amazon.com/cloudwatch/home?region={{.AWS_REGION}}#dashboards:name={{.PROJECT_NAME}}"
+      - echo "☕ JVM Metrics: Memory, GC, Thread usage available in CloudWatch"
+
+  # 🏗️ Infrastructure as Code
+  tf:init:
+    desc: Initialize Terraform
+    dir: terraform
+    cmds:
+      - terraform init
+
+  tf:plan:
+    desc: Plan Terraform changes
+    dir: terraform
+    deps: [tf:init]
+    cmds:
+      - terraform plan -var="environment={{.ENVIRONMENT}}"
+
+  tf:apply:
+    desc: Apply Terraform changes
+    dir: terraform
+    deps: [package]
+    cmds:
+      - terraform apply -var="environment={{.ENVIRONMENT}}" -auto-approve
+
+  tf:destroy:
+    desc: Destroy Terraform infrastructure
+    dir: terraform
+    cmds:
+      - terraform destroy -var="environment={{.ENVIRONMENT}}" -auto-approve
+
+  # 🔐 OIDC Bootstrap
+  bootstrap:
+    desc: Bootstrap OIDC for GitHub Actions deployment
+    dir: terraform
+    deps: [tf:init]
+    cmds:
+      - |
+        echo "🚀 Bootstrapping OIDC infrastructure..."
+        read -p "GitHub Organization: " GITHUB_ORG
+        read -p "GitHub Repository: " GITHUB_REPO
+        read -p "Create new OIDC provider? (y/n): " CREATE_OIDC
+        CREATE_OIDC_BOOL=$([ "$CREATE_OIDC" = "y" ] && echo "true" || echo "false")
+        terraform plan \
+          -var="github_org=$GITHUB_ORG" \
+          -var="github_repo=$GITHUB_REPO" \
+          -var="create_oidc_provider=$CREATE_OIDC_BOOL" \
+          -var="environment={{.ENVIRONMENT}}" \
+          -out=bootstrap.tfplan
+        echo ""
+        echo "📋 Review the plan above. Continue? (y/n)"
+        read -p "> " CONTINUE
+        if [ "$CONTINUE" = "y" ]; then
+          terraform apply bootstrap.tfplan
+          echo ""
+          echo "✅ OIDC infrastructure created!"
+          echo "🔧 Bootstrap script generated at: scripts/bootstrap-oidc.sh"
+          echo "📄 Run the script to generate GitHub Actions workflow"
+        else
+          echo "❌ Bootstrap cancelled"
+        fi
+
+  tf:validate:
+    desc: Validate Terraform configuration
+    dir: terraform
+    cmds:
+      - terraform validate
+      - terraform fmt -check
+
+  tf:security:
+    desc: Run security checks on Terraform
+    dir: terraform
+    cmds:
+      - |
+        if command -v tfsec >/dev/null 2>&1; then
+          tfsec .
+        else
+          echo "⚠️  tfsec not installed. Install with: brew install tfsec"
+        fi
+
+  # 🛡️ Well-Architected: Ship with Excellence
+  lint:
+    desc: Run Java code quality checks
+    deps: [compile]
+    cmds:
+      - mvn checkstyle:check
+      - mvn spotbugs:check
+      - mvn pmd:check
+
+  lint:fix:
+    desc: Auto-fix code formatting issues
+    cmds:
+      - mvn spotless:apply
+
+  security:
+    desc: Run security audit and vulnerability scanning
+    deps: [compile]
+    cmds:
+      - mvn dependency-check:check
+      - |
+        if mvn help:describe -Dplugin=com.github.spotbugs:spotbugs-maven-plugin >/dev/null 2>&1; then
+          mvn spotbugs:spotbugs
+        fi
+
+  analyze:
+    desc: Run static code analysis
+    deps: [compile]
+    cmds:
+      - mvn sonar:sonar -Dsonar.host.url=http://localhost:9000 || echo "⚠️  SonarQube not available"
+      - mvn site
+
+  validate:
+    desc: Run all validation checks
+    deps: [compile]
+    cmds:
+      - task: lint
+      - task: test
+      - task: security
+      - task: tf:validate
+      - task: tf:security
+
+  # 🚀 Deployment Pipeline
+  deploy:dev:
+    desc: Deploy to development environment
+    cmds:
+      - task: validate
+      - task: tf:apply
+        vars: {ENVIRONMENT: dev}
+
+  deploy:staging:
+    desc: Deploy to staging environment
+    cmds:
+      - task: validate
+      - task: tf:apply
+        vars: {ENVIRONMENT: staging}
+
+  deploy:prod:
+    desc: Deploy to production environment
+    cmds:
+      - task: validate
+      - task: tf:apply
+        vars: {ENVIRONMENT: prod}
+
+  # 🧹 Cleanup
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - mvn clean
+      - rm -rf build/
+
+  clean:tf:
+    desc: Clean Terraform state (DANGEROUS)
+    dir: terraform
+    cmds:
+      - rm -rf .terraform/
+      - rm -f .terraform.lock.hcl
+      - rm -f terraform.tfstate*
+
+  # 🔍 Development Tools
+  dev:setup:
+    desc: Setup Java development environment
+    cmds:
+      - java --version
+      - mvn --version
+      - task: deps
+      - task: tf:init
+      - echo "✅ Java development environment ready!"
+      - echo "☕ Java version: {{.JAVA_VERSION}}"
+      - echo "🏗️  Maven configured with {{.MAVEN_OPTS}}"
+      - echo "💡 Run 'task test:watch' for TDD workflow"
+      - echo "🚀 Run 'task deploy:dev' to deploy"
+
+  dev:tools:
+    desc: Install Java development tools
+    cmds:
+      - |
+        echo "🛠️ Java development tools available:"
+        echo "• SpotBugs: Static analysis for bugs"
+        echo "• Checkstyle: Code style checking"
+        echo "• PMD: Source code analyzer"
+        echo "• JaCoCo: Code coverage"
+        echo "• OWASP Dependency Check: Security vulnerabilities"
+
+  dev:invoke:
+    desc: Invoke Lambda function locally using SAM
+    deps: [package]
+    cmds:
+      - |
+        echo "🧪 Invoking hello function locally..."
+        if command -v sam >/dev/null 2>&1; then
+          sam local invoke HelloFunction --event events/api-gateway-event.json
+        else
+          echo "⚠️  AWS SAM CLI not installed"
+        fi
+
+  dev:debug:
+    desc: Start Lambda function in debug mode
+    deps: [package]
+    cmds:
+      - |
+        echo "🐛 Starting debug mode on port 5858..."
+        if command -v sam >/dev/null 2>&1; then
+          sam local start-api --debug-port 5858
+        else
+          echo "⚠️  AWS SAM CLI not installed"
+        fi
+
+  api:docs:
+    desc: Generate API documentation from OpenAPI spec
+    cmds:
+      - |
+        if command -v redoc-cli >/dev/null 2>&1; then
+          redoc-cli build openapi.yaml --output docs/api.html
+          echo "📚 API documentation generated: docs/api.html"
+        else
+          echo "⚠️  redoc-cli not installed. Run: npm install -g redoc-cli"
+        fi
+
+  api:validate:
+    desc: Validate OpenAPI specification
+    cmds:
+      - |
+        if command -v swagger-codegen >/dev/null 2>&1; then
+          swagger-codegen validate -i openapi.yaml
+        else
+          echo "⚠️  swagger-codegen not installed"
+          echo "📝 OpenAPI spec located at: openapi.yaml"
+        fi
+
+  # 📊 Performance Analysis
+  profile:
+    desc: Run JVM profiling
+    deps: [package]
+    cmds:
+      - echo "🔬 JVM profiling available through:"
+      - echo "• CloudWatch JVM metrics (automatic)"
+      - echo "• X-Ray performance traces"
+      - echo "• JFR (Java Flight Recorder) for detailed analysis"
+
+  benchmark:
+    desc: Run performance benchmarks
+    deps: [compile]
+    cmds:
+      - mvn test -Dtest="**/*Benchmark"
+
+  # 📊 Well-Architected Review
+  review:
+    desc: Open Well-Architected review document
+    cmds:
+      - |
+        if [ -f "WELL_ARCHITECTED.md" ]; then
+          echo "📋 Opening Well-Architected review..."
+          open WELL_ARCHITECTED.md 2>/dev/null || echo "📄 Review document: WELL_ARCHITECTED.md"
+        else
+          echo "❌ WELL_ARCHITECTED.md not found. Run 'task generate:docs' first."
+        fi
+
+  generate:docs:
+    desc: Generate project documentation
+    cmds:
+      - task: api:docs
+      - task: test:coverage
+      - mvn site
+      - echo "📚 Documentation generated successfully!"
+      - echo "📊 Coverage report: target/site/jacoco/index.html"
+      - echo "📚 API docs: docs/api.html"
+      - echo "🏗️  Maven site: target/site/index.html"
+
+  # 🔧 Advanced Java Tools
+  graalvm:setup:
+    desc: Setup GraalVM for native compilation
+    cmds:
+      - |
+        echo "🚀 GraalVM Native Image setup:"
+        echo "1. Install GraalVM: sdk install java 17.0.8-graal"
+        echo "2. Install native-image: gu install native-image"
+        echo "3. Run: task graalvm:compile"
+
+  graalvm:compile:
+    desc: Compile to native image with GraalVM
+    deps: [package]
+    cmds:
+      - |
+        if command -v native-image >/dev/null 2>&1; then
+          echo "🔨 Compiling to native image..."
+          native-image -jar build/hello-lambda.jar build/hello-native
+          echo "✅ Native image: build/hello-native"
+        else
+          echo "⚠️  GraalVM native-image not available"
+        fi
