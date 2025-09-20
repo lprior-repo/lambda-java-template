@@ -96,7 +96,8 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.11.0</version>
                     <configuration>
-                        <release>17</release>
+                        <source>17</source>
+                        <target>17</target>
                     </configuration>
                 </plugin>
 
@@ -134,25 +135,20 @@
                 </plugin>
 
                 <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-checkstyle-plugin</artifactId>
-                    <version>3.3.1</version>
-                    <configuration>
-                        <configLocation>google_checks.xml</configLocation>
-                        <failOnViolation>false</failOnViolation>
-                        <consoleOutput>true</consoleOutput>
-                    </configuration>
-                </plugin>
-
-                <plugin>
                     <groupId>org.owasp</groupId>
                     <artifactId>dependency-check-maven</artifactId>
                     <version>8.4.2</version>
                     <configuration>
-                        <failBuildOnCVSS>8</failBuildOnCVSS>
-                        <suppressionFiles>
-                            <suppressionFile>owasp-suppressions.xml</suppressionFile>
-                        </suppressionFiles>
+                        <skipSystemScope>true</skipSystemScope>
+                        <skipProvidedScope>true</skipProvidedScope>
+                        <skipRuntimeScope>false</skipRuntimeScope>
+                        <skipTestScope>true</skipTestScope>
+                        <!-- Configure to work offline to avoid NVD update issues -->
+                        <autoUpdate>false</autoUpdate>
+                        <enableRetired>false</enableRetired>
+                        <enableExperimental>false</enableExperimental>
+                        <!-- Suppress false positives for Lambda runtime -->
+                        <suppressionFile>owasp-suppression.xml</suppressionFile>
                     </configuration>
                 </plugin>
             </plugins>

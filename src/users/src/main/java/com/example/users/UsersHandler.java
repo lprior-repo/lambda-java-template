@@ -7,25 +7,46 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import software.amazon.lambda.powertools.logging.Logging;
+import software.amazon.lambda.powertools.tracing.Tracing;
+import software.amazon.lambda.powertools.metrics.Metrics;
 
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Users Lambda function handler
+ * Users Lambda function handler with AWS Powertools integration
  */
+@Logging(logEvent = true, samplingRate = 0.1)
+@Tracing(captureMode = Tracing.CaptureMode.RESPONSE_AND_ERROR)
+@Metrics(namespace = "LambdaTemplate/Users", service = "users-service")
 public class UsersHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
+    @Tracing
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         return processUsersRequest(input, context);
     }
 
+    @Tracing
     private APIGatewayProxyResponseEvent processUsersRequest(APIGatewayProxyRequestEvent input, Context context) {
         try {
+            // Add tracing annotations
+            software.amazon.lambda.powertools.tracing.Tracing.putAnnotation("path", input.getPath() != null ? input.getPath() : "/users");
+            software.amazon.lambda.powertools.tracing.Tracing.putAnnotation("httpMethod", input.getHttpMethod());
+
+            // Add custom metrics
+            software.amazon.lambda.powertools.metrics.Metrics.addMetric("RequestCount", 1.0);
+
+            // Log structured information
+            software.amazon.lambda.powertools.logging.LoggingUtils.appendKey("requestId", context.getAwsRequestId());
+            software.amazon.lambda.powertools.logging.LoggingUtils.appendKey("functionName", context.getFunctionName());
+            software.amazon.lambda.powertools.logging.LoggingUtils.appendKey("functionVersion", context.getFunctionVersion());
+            software.amazon.lambda.powertools.logging.LoggingUtils.appendKey("remainingTime", context.getRemainingTimeInMillis());
+
             // Fetch users data
             ArrayNode users = getUsersFromDatabase();
 
@@ -39,9 +60,19 @@ public class UsersHandler implements RequestHandler<APIGatewayProxyRequestEvent,
             response.setHeaders(headers);
             response.setBody(objectMapper.writeValueAsString(responseData));
 
+            // Add success metrics
+            software.amazon.lambda.powertools.metrics.Metrics.addMetric("SuccessCount", 1.0);
+            software.amazon.lambda.powertools.metrics.Metrics.addMetric("UserCount", (double) users.size());
+
             return response;
 
         } catch (Exception e) {
+            // Log error with context
+            software.amazon.lambda.powertools.logging.LoggingUtils.appendKey("error", e.getMessage());
+
+            // Add error metrics
+            software.amazon.lambda.powertools.metrics.Metrics.addMetric("ErrorCount", 1.0);
+
             // Create error response
             Map<String, String> headers = createResponseHeaders(context.getAwsRequestId());
             APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
@@ -63,6 +94,7 @@ public class UsersHandler implements RequestHandler<APIGatewayProxyRequestEvent,
         }
     }
 
+    @Tracing
     private ArrayNode getUsersFromDatabase() {
         // Simulate database latency
         try {
@@ -95,7 +127,8 @@ public class UsersHandler implements RequestHandler<APIGatewayProxyRequestEvent,
         user3.put("createdAt", "2024-01-17T09:15:00Z");
         users.add(user3);
 
-        // Users fetched successfully
+        // Add tracing annotation
+        software.amazon.lambda.powertools.tracing.Tracing.putAnnotation("userCount", users.size());
 
         return users;
     }
@@ -107,7 +140,8 @@ public class UsersHandler implements RequestHandler<APIGatewayProxyRequestEvent,
         responseBody.put("timestamp", Instant.now().toString());
         responseBody.put("requestId", requestId);
 
-        // Response data prepared
+        // Add tracing metadata
+        software.amazon.lambda.powertools.tracing.Tracing.putMetadata("response", responseBody);
 
         return responseBody;
     }

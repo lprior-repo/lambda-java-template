@@ -26,3 +26,15 @@ variable "namespace" {
   }
 }
 
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+  default     = "lambda-java-template"
+}
+
+variable "is_ephemeral" {
+  description = "Whether this is an ephemeral environment"
+  type        = bool
+  default     = false
+}
+

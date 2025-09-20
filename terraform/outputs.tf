@@ -1,41 +1,41 @@
 output "health_lambda_function_arn" {
   description = "ARN of the Health Lambda function"
-  value       = module.health_lambda.lambda_function_arn
+  value       = module.lambda_functions["health"].lambda_function_arn
 }
 
 output "users_lambda_function_arn" {
   description = "ARN of the Users Lambda function"
-  value       = module.users_lambda.lambda_function_arn
+  value       = module.lambda_functions["users"].lambda_function_arn
 }
 
 output "posts_lambda_function_arn" {
   description = "ARN of the Posts Lambda function"
-  value       = module.posts_lambda.lambda_function_arn
+  value       = module.lambda_functions["posts"].lambda_function_arn
 }
 
 output "event_processor_lambda_function_arn" {
   description = "ARN of the Event Processor Lambda function"
-  value       = module.event_processor_lambda.lambda_function_arn
+  value       = module.event_processor.lambda_function_arn
 }
 
 output "api_gateway_url" {
   description = "URL of the API Gateway"
-  value       = module.api_gateway.api_endpoint
+  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}"
 }
 
 output "health_endpoint" {
   description = "Health endpoint URL"
-  value       = "${module.api_gateway.api_endpoint}/health"
+  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/health"
 }
 
 output "users_endpoint" {
   description = "Users endpoint URL"
-  value       = "${module.api_gateway.api_endpoint}/users"
+  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/users"
 }
 
 output "posts_endpoint" {
   description = "Posts endpoint URL"
-  value       = "${module.api_gateway.api_endpoint}/posts"
+  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/posts"
 }
 
 output "users_table_name" {

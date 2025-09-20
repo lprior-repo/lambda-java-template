@@ -31,7 +31,7 @@ This template provides a complete setup for AWS Lambda functions written in Java
 
 - Java 17+
 - Maven 3.8+
-- Terraform >= 1.0
+- Terraform >= 1.13
 - AWS CLI configured
 - Make (optional, for using Makefile commands)
 
