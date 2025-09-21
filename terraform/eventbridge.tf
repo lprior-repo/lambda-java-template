@@ -26,14 +26,14 @@ resource "aws_cloudwatch_event_target" "audit_target" {
   rule           = aws_cloudwatch_event_rule.crud_events.name
   event_bus_name = aws_cloudwatch_event_bus.app_events.name
   target_id      = "AuditProcessor"
-  arn            = module.event_processor.lambda_function_arn
+  arn            = module.lambda3.lambda_function_arn
 }
 
 # Lambda permission for EventBridge
 resource "aws_lambda_permission" "allow_eventbridge" {
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
-  function_name = module.event_processor.lambda_function_name
+  function_name = module.lambda3.lambda_function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.crud_events.arn
 }

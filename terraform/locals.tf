@@ -12,8 +12,8 @@ locals {
 
   # Lambda functions configuration for GraalVM Java product service
   lambda_functions = {
-    product_service = {
-      name       = "${local.function_base_name}-product-service"
+    lambda1 = {
+      name       = "${local.function_base_name}-lambda1"
       source_dir = "../product-service/target/product-service.zip"
       runtime    = "provided.al2"
       handler    = "not-used-for-native"
@@ -26,15 +26,15 @@ locals {
         { path = "/products/{id}", method = "DELETE", auth = true }
       ]
     }
-    authorizer = {
-      name       = "${local.function_base_name}-authorizer"
+    lambda2 = {
+      name       = "${local.function_base_name}-lambda2"
       source_dir = "../product-service/target/authorizer.zip"
       runtime    = "provided.al2"
       handler    = "not-used-for-native"
       routes     = []
     }
-    event_processor = {
-      name       = "${local.function_base_name}-event-processor"
+    lambda3 = {
+      name       = "${local.function_base_name}-lambda3"
       source_dir = "../product-service/target/event-processor.zip"
       runtime    = "provided.al2"
       handler    = "not-used-for-native"

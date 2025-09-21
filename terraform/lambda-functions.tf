@@ -64,18 +64,18 @@ module "lambda_functions" {
 }
 
 # Authorizer Lambda (separate module since it doesn't need routes)
-module "api_key_authorizer" {
+module "lambda2" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
-  function_name = local.lambda_functions.authorizer.name
+  function_name = local.lambda_functions.lambda2.name
   description   = "API Key authorizer for API Gateway"
-  handler       = local.lambda_functions.authorizer.handler
-  runtime       = local.lambda_functions.authorizer.runtime
+  handler       = local.lambda_functions.lambda2.handler
+  runtime       = local.lambda_functions.lambda2.runtime
   architectures = ["arm64"]
 
   create_package         = false
-  local_existing_package = local.lambda_functions.authorizer.source_dir
+  local_existing_package = local.lambda_functions.lambda2.source_dir
 
   timeout     = 30
   memory_size = 256
@@ -94,18 +94,18 @@ module "api_key_authorizer" {
 }
 
 # Event Processor Lambda (for EventBridge)
-module "event_processor" {
+module "lambda3" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
-  function_name = local.lambda_functions.event_processor.name
+  function_name = local.lambda_functions.lambda3.name
   description   = "Process EventBridge events for audit logging"
-  handler       = local.lambda_functions.event_processor.handler
-  runtime       = local.lambda_functions.event_processor.runtime
+  handler       = local.lambda_functions.lambda3.handler
+  runtime       = local.lambda_functions.lambda3.runtime
   architectures = ["arm64"]
 
   create_package         = false
-  local_existing_package = local.lambda_functions.event_processor.source_dir
+  local_existing_package = local.lambda_functions.lambda3.source_dir
 
   timeout     = 30
   memory_size = 256
@@ -149,7 +149,7 @@ resource "aws_lambda_permission" "api_gateway_lambda" {
 resource "aws_lambda_permission" "authorizer" {
   statement_id  = "AllowExecutionFromAPIGateway-authorizer"
   action        = "lambda:InvokeFunction"
-  function_name = module.api_key_authorizer.lambda_function_name
+  function_name = module.lambda2.lambda_function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.api.execution_arn}/*/*"
 }

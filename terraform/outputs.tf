@@ -1,11 +1,11 @@
-output "product_service_lambda_function_arn" {
-  description = "ARN of the Product Service Lambda function"
-  value       = module.lambda_functions["product_service"].lambda_function_arn
+output "lambda1_function_arn" {
+  description = "ARN of Lambda1 function (Product Service)"
+  value       = module.lambda_functions["lambda1"].lambda_function_arn
 }
 
-output "event_processor_lambda_function_arn" {
-  description = "ARN of the Event Processor Lambda function"
-  value       = module.event_processor.lambda_function_arn
+output "lambda3_function_arn" {
+  description = "ARN of Lambda3 function (Event Processor)"
+  value       = module.lambda3.lambda_function_arn
 }
 
 output "api_gateway_url" {

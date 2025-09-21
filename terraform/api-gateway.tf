@@ -29,7 +29,7 @@ resource "aws_apigatewayv2_stage" "api" {
 resource "aws_apigatewayv2_authorizer" "api_key" {
   api_id                            = aws_apigatewayv2_api.api.id
   authorizer_type                   = "REQUEST"
-  authorizer_uri                    = module.api_key_authorizer.lambda_function_invoke_arn
+  authorizer_uri                    = module.lambda2.lambda_function_invoke_arn
   identity_sources                  = ["$request.header.x-api-key"]
   name                              = "${local.function_base_name}-api-key-authorizer"
   authorizer_payload_format_version = "2.0"
