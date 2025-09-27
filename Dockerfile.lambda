@@ -1,0 +1,38 @@
+FROM amazonlinux:2
+
+# Install GraalVM
+RUN yum update -y && \
+    yum install -y wget tar gzip zip && \
+    wget https://download.oracle.com/graalvm/21/latest/graalvm-jdk-21_linux-x64_bin.tar.gz && \
+    tar -xzf graalvm-jdk-21_linux-x64_bin.tar.gz && \
+    mv graalvm-jdk-21.* /opt/graalvm && \
+    rm graalvm-jdk-21_linux-x64_bin.tar.gz
+
+ENV JAVA_HOME=/opt/graalvm
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+WORKDIR /build
+COPY product-service/target/product-service.jar .
+
+# Build native image with Amazon Linux 2 glibc compatibility
+RUN native-image \
+    --no-fallback \
+    --enable-http \
+    --enable-https \
+    --enable-url-protocols=http,https \
+    --report-unsupported-elements-at-runtime \
+    --allow-incomplete-classpath \
+    --initialize-at-run-time=org.slf4j,ch.qos.logback,software.amazon.awssdk.crt \
+    -cp product-service.jar \
+    -H:+ReportExceptionStackTraces \
+    -H:Name=product-service-native \
+    --verbose \
+    com.amazonaws.services.lambda.runtime.api.client.AWSLambda
+
+RUN echo '#!/bin/sh' > bootstrap && \
+    echo 'set -euo pipefail' >> bootstrap && \
+    echo 'exec ./product-service-native' >> bootstrap && \
+    chmod +x bootstrap && \
+    zip product-service-native.zip bootstrap product-service-native
+
+CMD ["cp", "product-service-native.zip", "/output/"]

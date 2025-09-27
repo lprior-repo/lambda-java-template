@@ -22,7 +22,6 @@ module "lambda_functions" {
     PRODUCTS_TABLE_NAME = aws_dynamodb_table.products.name
     AUDIT_TABLE_NAME   = aws_dynamodb_table.audit_logs.name
     EVENT_BUS_NAME     = aws_cloudwatch_event_bus.app_events.name
-    AWS_REGION         = local.aws_region
   }
 
   # CloudWatch Logs
@@ -83,7 +82,6 @@ module "lambda2" {
   environment_variables = {
     ENVIRONMENT = local.environment
     LOG_LEVEL   = "INFO"
-    AWS_REGION  = local.aws_region
   }
 
   # CloudWatch Logs
@@ -114,7 +112,6 @@ module "lambda3" {
     ENVIRONMENT      = local.environment
     LOG_LEVEL        = "INFO"
     AUDIT_TABLE_NAME = aws_dynamodb_table.audit_logs.name
-    AWS_REGION       = local.aws_region
   }
 
   # CloudWatch Logs

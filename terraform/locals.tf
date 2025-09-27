@@ -10,13 +10,13 @@ locals {
   actual_namespace   = local.namespace != "" ? local.namespace : local.environment
   function_base_name = "${local.project_name}-${local.actual_namespace}"
 
-  # Lambda functions configuration for GraalVM Java product service
+  # Lambda functions configuration for Java product service with deployment packages
   lambda_functions = {
     lambda1 = {
       name       = "${local.function_base_name}-lambda1"
-      source_dir = "../product-service/target/product-service.zip"
-      runtime    = "provided.al2"
-      handler    = "not-used-for-native"
+      source_dir = "../build/product-service.zip"
+      runtime    = "java21"
+      handler    = "software.amazonaws.example.product.ProductHandler::handleRequest"
       routes = [
         { path = "/health", method = "GET", auth = false },
         { path = "/products", method = "GET", auth = true },
@@ -28,16 +28,16 @@ locals {
     }
     lambda2 = {
       name       = "${local.function_base_name}-lambda2"
-      source_dir = "../product-service/target/authorizer.zip"
-      runtime    = "provided.al2"
-      handler    = "not-used-for-native"
+      source_dir = "../build/authorizer-service.zip"
+      runtime    = "java21"
+      handler    = "software.amazonaws.example.product.AuthorizerHandler::handleRequest"
       routes     = []
     }
     lambda3 = {
       name       = "${local.function_base_name}-lambda3"
-      source_dir = "../product-service/target/event-processor.zip"
-      runtime    = "provided.al2"
-      handler    = "not-used-for-native"
+      source_dir = "../build/event-processor-service.zip"
+      runtime    = "java21"
+      handler    = "software.amazonaws.example.product.EventProcessorHandler::handleRequest"
       routes     = []
     }
   }
