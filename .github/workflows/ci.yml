@@ -50,17 +50,18 @@ jobs:
           distribution: 'corretto'
           cache: maven
 
-      - name: Run tests with coverage
+      - name: Run tests
         working-directory: ${{ matrix.function }}
         run: |
-          mvn test jacoco:report jacoco:check
+          mvn test
 
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
-        with:
-          name: coverage-report-${{ matrix.function }}
-          path: "**/target/site/jacoco/"
-          retention-days: 30
+      # Coverage reports removed to streamline CI pipeline
+      # - name: Upload coverage reports
+      #   uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+      #   with:
+      #     name: coverage-report-${{ matrix.function }}
+      #     path: "**/target/site/jacoco/"
+      #     retention-days: 30
 
       - name: Build JAR package
         working-directory: ${{ matrix.function }}
