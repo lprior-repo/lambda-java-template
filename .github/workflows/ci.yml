@@ -28,8 +28,8 @@ jobs:
       - name: Detect changed functions
         id: changes
         run: |
-          # Get list of all function directories
-          FUNCTIONS=$(find src -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | jq -R -s -c 'split("\n")[:-1]')
+          # Get list of all function directories (Maven modules ending with -service)
+          FUNCTIONS=$(find . -maxdepth 1 -name "*-service" -type d -exec basename {} \; | jq -R -s -c 'split("\n")[:-1]')
           echo "functions=$FUNCTIONS" >> $GITHUB_OUTPUT
           echo "Detected functions: $FUNCTIONS"
 
