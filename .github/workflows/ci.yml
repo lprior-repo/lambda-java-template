@@ -51,6 +51,7 @@ jobs:
           cache: maven
 
       - name: Run tests with coverage
+        working-directory: ${{ matrix.function }}
         run: |
           mvn test jacoco:report jacoco:check
 
@@ -62,6 +63,7 @@ jobs:
           retention-days: 30
 
       - name: Build JAR package
+        working-directory: ${{ matrix.function }}
         run: |
           mvn clean package -DskipTests
 
@@ -74,9 +76,10 @@ jobs:
           native-image-job-reports: 'true'
 
       - name: Build native image
+        working-directory: ${{ matrix.function }}
         run: |
-          chmod +x ./build-graalvm-native.sh
-          ./build-graalvm-native.sh
+          chmod +x ../build-graalvm-native.sh
+          ../build-graalvm-native.sh
 
       - name: Upload native build artifacts
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
