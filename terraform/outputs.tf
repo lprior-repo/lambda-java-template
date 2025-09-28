@@ -53,3 +53,19 @@ output "sns_alerts_topic_arn" {
   description = "ARN of the SNS topic for CloudWatch alarms"
   value       = aws_sns_topic.alerts.arn
 }
+
+# Step Functions outputs
+output "step_functions_arn" {
+  description = "ARN of the Step Functions state machine"
+  value       = aws_sfn_state_machine.order_processing.arn
+}
+
+output "step_functions_name" {
+  description = "Name of the Step Functions state machine"
+  value       = aws_sfn_state_machine.order_processing.name
+}
+
+output "order_processing_endpoint" {
+  description = "API Gateway endpoint for order processing workflow"
+  value       = "${aws_apigatewayv2_api.api.api_endpoint}/orders"
+}

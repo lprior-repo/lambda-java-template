@@ -72,3 +72,67 @@ resource "aws_apigatewayv2_route" "lambda" {
   authorization_type = each.value.auth ? "CUSTOM" : "NONE"
   authorizer_id      = each.value.auth ? aws_apigatewayv2_authorizer.api_key.id : null
 }
+
+# Step Functions integration for order processing workflow
+resource "aws_apigatewayv2_integration" "step_functions" {
+  api_id           = aws_apigatewayv2_api.api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = "arn:aws:apigateway:${var.aws_region}:states:action/StartExecution"
+
+  integration_method = "POST"
+  credentials_arn    = aws_iam_role.api_gateway_step_functions_role.arn
+
+  request_templates = {
+    "application/json" = jsonencode({
+      stateMachineArn = aws_sfn_state_machine.order_processing.arn
+      input           = "$util.escapeJavaScript($input.body)"
+    })
+  }
+}
+
+resource "aws_apigatewayv2_route" "step_functions_route" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "POST /orders"
+  target    = "integrations/${aws_apigatewayv2_integration.step_functions.id}"
+
+  authorization_type = "CUSTOM"
+  authorizer_id      = aws_apigatewayv2_authorizer.api_key.id
+}
+
+# IAM role for API Gateway to execute Step Functions
+resource "aws_iam_role" "api_gateway_step_functions_role" {
+  name = "${local.function_base_name}-api-gateway-step-functions-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "api_gateway_step_functions_policy" {
+  name = "${local.function_base_name}-api-gateway-step-functions-policy"
+  role = aws_iam_role.api_gateway_step_functions_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "states:StartExecution"
+        ]
+        Resource = aws_sfn_state_machine.order_processing.arn
+      }
+    ]
+  })
+}

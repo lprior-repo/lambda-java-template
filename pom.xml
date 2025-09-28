@@ -61,6 +61,10 @@
         <module>product-service</module>
         <module>authorizer-service</module>
         <module>event-processor-service</module>
+        <module>payment-service</module>
+        <module>order-validation-service</module>
+        <module>inventory-service</module>
+        <module>notification-service</module>
     </modules>
 
     <dependencyManagement>
