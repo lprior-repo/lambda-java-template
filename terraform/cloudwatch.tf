@@ -367,7 +367,7 @@ resource "aws_cloudwatch_log_metric_filter" "business_metrics" {
     name      = "ProductOperations"
     namespace = "ProductService/Business"
     value     = "1"
-    
+
     default_value = "0"
   }
 }
@@ -383,7 +383,7 @@ resource "aws_cloudwatch_log_metric_filter" "error_metrics" {
     name      = "ApplicationErrors"
     namespace = "ProductService/Errors"
     value     = "1"
-    
+
     default_value = "0"
   }
 }
@@ -430,11 +430,11 @@ resource "aws_cloudwatch_dashboard" "business_kpis" {
               function_config.name
             ]
           ]
-          view    = "singleValue"
-          region  = var.aws_region
-          title   = "Average Response Time"
-          period  = 300
-          stat    = "Average"
+          view   = "singleValue"
+          region = var.aws_region
+          title  = "Average Response Time"
+          period = 300
+          stat   = "Average"
         }
       }
     ]
