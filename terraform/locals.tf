@@ -21,6 +21,19 @@ locals {
   dynamodb_read_capacity  = var.billing_mode == "PROVISIONED" ? var.read_capacity : null
   dynamodb_write_capacity = var.billing_mode == "PROVISIONED" ? var.write_capacity : null
 
+  # API Gateway configuration
+  api_gateway_name = "${local.function_base_name}-api"
+
+  # DynamoDB table configurations for monitoring
+  table_configurations = {
+    products = {
+      name = "${local.function_base_name}-products"
+    }
+    audit_logs = {
+      name = "${local.function_base_name}-audit-logs"
+    }
+  }
+
   # Lambda functions configuration for Java product service with deployment packages
   lambda_functions = {
     lambda1 = {

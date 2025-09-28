@@ -37,3 +37,19 @@ output "event_bus_name" {
   description = "Name of the custom EventBridge bus"
   value       = aws_cloudwatch_event_bus.app_events.name
 }
+
+# CloudWatch Monitoring Outputs
+output "lambda_dashboard_url" {
+  description = "URL to the Lambda CloudWatch Dashboard"
+  value       = "https://${local.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${local.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.lambda_dashboard.dashboard_name}"
+}
+
+output "business_kpis_dashboard_url" {
+  description = "URL to the Business KPIs CloudWatch Dashboard"
+  value       = "https://${local.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${local.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.business_kpis.dashboard_name}"
+}
+
+output "sns_alerts_topic_arn" {
+  description = "ARN of the SNS topic for CloudWatch alarms"
+  value       = aws_sns_topic.alerts.arn
+}

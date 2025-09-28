@@ -258,6 +258,46 @@ tasks:
       - task: tf:validate
       - task: tf:security
 
+  validate:prod-ready:
+    desc: Comprehensive production readiness validation
+    cmds:
+      - echo "🔍 Starting production readiness validation..."
+      - task: validate
+      - task: test:coverage
+      - task: validate:powertools
+      - task: validate:monitoring
+      - task: validate:native
+      - echo "✅ Production readiness validation completed!"
+
+  validate:powertools:
+    desc: Validate AWS Lambda Powertools integration
+    cmds:
+      - echo "🔧 Validating Lambda Powertools integration..."
+      - grep -r "@Logging" product-service/src/ || echo "❌ Missing @Logging annotations"
+      - grep -r "@Tracing" product-service/src/ || echo "❌ Missing @Tracing annotations" 
+      - grep -r "TracingUtils" product-service/src/ || echo "❌ Missing TracingUtils usage"
+      - grep -r "MDC" product-service/src/ || echo "❌ Missing structured logging"
+      - echo "✅ Lambda Powertools validation completed"
+
+  validate:monitoring:
+    desc: Validate CloudWatch monitoring setup
+    cmds:
+      - echo "📊 Validating CloudWatch monitoring setup..."
+      - test -f terraform/cloudwatch.tf || echo "❌ Missing CloudWatch configuration"
+      - grep -q "aws_cloudwatch_dashboard" terraform/cloudwatch.tf || echo "❌ Missing CloudWatch dashboards"
+      - grep -q "aws_cloudwatch_metric_alarm" terraform/cloudwatch.tf || echo "❌ Missing CloudWatch alarms"
+      - grep -q "aws_sns_topic" terraform/cloudwatch.tf || echo "❌ Missing SNS alerts"
+      - echo "✅ CloudWatch monitoring validation completed"
+
+  validate:native:
+    desc: Validate GraalVM native build capabilities
+    cmds:
+      - echo "🏗️ Validating GraalVM native build setup..."
+      - test -f build-graalvm-native.sh || echo "❌ Missing native build script"
+      - grep -q "native-maven-plugin" pom.xml || echo "❌ Missing native Maven plugin"
+      - grep -q "graalvm" .github/workflows/ci.yml || echo "❌ Missing GraalVM in CI pipeline"
+      - echo "✅ GraalVM native build validation completed"
+
   # 🚀 Deployment Pipeline
   deploy:dev:
     desc: Deploy to development environment
