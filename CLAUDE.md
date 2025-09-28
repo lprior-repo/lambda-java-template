@@ -600,3 +600,20 @@ GitHub Actions workflow:
 - **Cost analysis** - Infracost integration for cost estimates
 
 Functions are auto-detected from `src/` directory structure.
+
+## CRITICAL INFRASTRUCTURE CONSTRAINTS
+
+**❌ NEVER USE CLOUDFORMATION - FORBIDDEN**
+
+- **CloudFormation is STRICTLY PROHIBITED** in this project
+- **All infrastructure MUST use Terraform only**
+- **No CloudFormation templates, stack sets, or references allowed**
+- **Use terraform-aws-modules exclusively for infrastructure**
+- **Deployment strategies must be Terraform-based only**
+
+**❌ NO PERFORMANCE TESTING**
+
+- **Performance testing is NOT REQUIRED for this project**
+- **Do not implement Artillery.io, JMeter, or load testing tools**
+- **Focus on functional testing only (unit, integration, contract, e2e)**
+- **Lambda functions are designed for serverless auto-scaling**

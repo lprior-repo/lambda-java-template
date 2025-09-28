@@ -13,24 +13,24 @@ module "lambda_functions" {
   create_package         = false
   local_existing_package = each.value.source_dir
 
-  timeout     = 30
-  memory_size = 512
+  timeout     = local.lambda_timeout
+  memory_size = local.lambda_memory
 
   environment_variables = {
-    ENVIRONMENT        = local.environment
-    LOG_LEVEL          = "INFO"
+    ENVIRONMENT         = local.environment
+    LOG_LEVEL           = "INFO"
     PRODUCTS_TABLE_NAME = aws_dynamodb_table.products.name
-    AUDIT_TABLE_NAME   = aws_dynamodb_table.audit_logs.name
-    EVENT_BUS_NAME     = aws_cloudwatch_event_bus.app_events.name
+    AUDIT_TABLE_NAME    = aws_dynamodb_table.audit_logs.name
+    EVENT_BUS_NAME      = aws_cloudwatch_event_bus.app_events.name
   }
 
   # CloudWatch Logs
   attach_cloudwatch_logs_policy     = true
-  cloudwatch_logs_retention_in_days = 14
+  cloudwatch_logs_retention_in_days = local.log_retention
 
   # X-Ray tracing
-  tracing_mode          = "Active"
-  attach_tracing_policy = true
+  tracing_mode          = local.xray_tracing ? "Active" : "PassThrough"
+  attach_tracing_policy = local.xray_tracing
 
   # DynamoDB permissions
   attach_policy_statements = true
@@ -76,8 +76,8 @@ module "lambda2" {
   create_package         = false
   local_existing_package = local.lambda_functions.lambda2.source_dir
 
-  timeout     = 30
-  memory_size = 256
+  timeout     = local.lambda_timeout
+  memory_size = 256 # Authorizer can use less memory
 
   environment_variables = {
     ENVIRONMENT = local.environment
@@ -86,7 +86,11 @@ module "lambda2" {
 
   # CloudWatch Logs
   attach_cloudwatch_logs_policy     = true
-  cloudwatch_logs_retention_in_days = 14
+  cloudwatch_logs_retention_in_days = local.log_retention
+
+  # X-Ray tracing
+  tracing_mode          = local.xray_tracing ? "Active" : "PassThrough"
+  attach_tracing_policy = local.xray_tracing
 
   tags = local.common_tags
 }
@@ -105,8 +109,8 @@ module "lambda3" {
   create_package         = false
   local_existing_package = local.lambda_functions.lambda3.source_dir
 
-  timeout     = 30
-  memory_size = 256
+  timeout     = local.lambda_timeout
+  memory_size = 256 # Event processor can use less memory
 
   environment_variables = {
     ENVIRONMENT      = local.environment
@@ -116,7 +120,11 @@ module "lambda3" {
 
   # CloudWatch Logs
   attach_cloudwatch_logs_policy     = true
-  cloudwatch_logs_retention_in_days = 14
+  cloudwatch_logs_retention_in_days = local.log_retention
+
+  # X-Ray tracing
+  tracing_mode          = local.xray_tracing ? "Active" : "PassThrough"
+  attach_tracing_policy = local.xray_tracing
 
   # DynamoDB permissions for audit logs
   attach_policy_statements = true

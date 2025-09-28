@@ -33,6 +33,8 @@
 
         <!-- Logging -->
         <slf4j.version>2.0.16</slf4j.version>
+        <logback.version>1.5.12</logback.version>
+        <logstash.version>8.0</logstash.version>
 
         <!-- Testing -->
         <junit.version>5.11.3</junit.version>
@@ -90,6 +92,11 @@
             </dependency>
             <dependency>
                 <groupId>software.amazon.lambda</groupId>
+                <artifactId>powertools-logging-logback</artifactId>
+                <version>${powertools.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>software.amazon.lambda</groupId>
                 <artifactId>powertools-tracing</artifactId>
                 <version>${powertools.version}</version>
             </dependency>
@@ -125,6 +132,18 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-simple</artifactId>
                 <version>${slf4j.version}</version>
+            </dependency>
+            
+            <!-- Logback for JSON structured logging -->
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>${logstash.version}</version>
             </dependency>
 
             <!-- AspectJ Runtime -->
@@ -344,21 +363,185 @@
                 <plugin>
                     <groupId>org.owasp</groupId>
                     <artifactId>dependency-check-maven</artifactId>
-                    <version>8.4.2</version>
+                    <version>10.0.4</version>
                     <configuration>
+                        <!-- Scope configuration -->
                         <skipSystemScope>true</skipSystemScope>
                         <skipProvidedScope>true</skipProvidedScope>
                         <skipRuntimeScope>false</skipRuntimeScope>
                         <skipTestScope>true</skipTestScope>
-                        <!-- Configure to work offline to avoid NVD update issues -->
-                        <autoUpdate>false</autoUpdate>
+                        
+                        <!-- Output configuration -->
+                        <formats>
+                            <format>HTML</format>
+                            <format>JSON</format>
+                            <format>SARIF</format>
+                        </formats>
+                        <prettyPrint>true</prettyPrint>
+                        
+                        <!-- Vulnerability database configuration -->
+                        <autoUpdate>true</autoUpdate>
+                        <cveValidForHours>24</cveValidForHours>
                         <enableRetired>false</enableRetired>
                         <enableExperimental>false</enableExperimental>
+                        
                         <!-- Suppress false positives for Lambda runtime -->
                         <suppressionFile>owasp-suppression.xml</suppressionFile>
+                        
+                        <!-- Fail build on CVSS 7+ (High severity) -->
+                        <failBuildOnCVSS>7</failBuildOnCVSS>
+                        <failOnError>false</failOnError>
+                        
+                        <!-- Performance optimizations -->
+                        <ossindexAnalyzerEnabled>true</ossindexAnalyzerEnabled>
+                        <nodeAnalyzerEnabled>false</nodeAnalyzerEnabled>
+                        <pyPackageAnalyzerEnabled>false</pyPackageAnalyzerEnabled>
+                        <rubygemsAnalyzerEnabled>false</rubygemsAnalyzerEnabled>
+                        <bundleAuditAnalyzerEnabled>false</bundleAuditAnalyzerEnabled>
+                        <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+                        <nuspecAnalyzerEnabled>false</nuspecAnalyzerEnabled>
+                        <nugetconfAnalyzerEnabled>false</nugetconfAnalyzerEnabled>
+                        <retirePyAnalyzerEnabled>false</retirePyAnalyzerEnabled>
+                        
+                        <!-- Include additional metadata -->
+                        <archiveAnalyzerEnabled>true</archiveAnalyzerEnabled>
+                        <jarAnalyzerEnabled>true</jarAnalyzerEnabled>
+                        <centralAnalyzerEnabled>true</centralAnalyzerEnabled>
+                        <nexusAnalyzerEnabled>false</nexusAnalyzerEnabled>
                     </configuration>
+                    <executions>
+                        <execution>
+                            <id>security-check</id>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                            <phase>verify</phase>
+                        </execution>
+                    </executions>
+                </plugin>
+                
+                <!-- Checkstyle for code quality -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>3.5.0</version>
+                    <configuration>
+                        <configLocation>google_checks.xml</configLocation>
+                        <violationSeverity>warning</violationSeverity>
+                        <failOnViolation>true</failOnViolation>
+                        <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>checkstyle-check</id>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                            <phase>validate</phase>
+                        </execution>
+                    </executions>
+                </plugin>
+                
+                <!-- SpotBugs for static analysis -->
+                <plugin>
+                    <groupId>com.github.spotbugs</groupId>
+                    <artifactId>spotbugs-maven-plugin</artifactId>
+                    <version>4.8.6.4</version>
+                    <configuration>
+                        <effort>Max</effort>
+                        <threshold>Medium</threshold>
+                        <failOnError>true</failOnError>
+                        <includeFilterFile>spotbugs-include.xml</includeFilterFile>
+                        <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>spotbugs-check</id>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                            <phase>verify</phase>
+                        </execution>
+                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>
     </build>
+    
+    <profiles>
+        <!-- Security scanning profile -->
+        <profile>
+            <id>security</id>
+            <build>
+                <plugins>
+                    <!-- OWASP Dependency Check -->
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <phase>validate</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    
+                    <!-- Checkstyle -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-checkstyle-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>security-checkstyle</id>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <phase>validate</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    
+                    <!-- SpotBugs -->
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>security-spotbugs</id>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <phase>compile</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
+        <!-- Code quality profile -->
+        <profile>
+            <id>quality</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>quality-coverage</id>
+                                <goals>
+                                    <goal>prepare-agent</goal>
+                                    <goal>report</goal>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

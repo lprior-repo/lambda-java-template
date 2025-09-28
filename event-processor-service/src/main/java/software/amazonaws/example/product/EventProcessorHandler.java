@@ -24,7 +24,7 @@ import java.util.UUID;
 public class EventProcessorHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(EventProcessorHandler.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String TABLE_NAME = System.getenv("AUDIT_TABLE_NAME");
+    // Table name is retrieved dynamically to allow testing different configurations
 
     private final DynamoDbClient dynamoDbClient;
 
@@ -37,6 +37,14 @@ public class EventProcessorHandler implements RequestHandler<Map<String, Object>
         this.dynamoDbClient = dynamoDbClient;
     }
 
+    private static String getTableName() {
+        String tableName = System.getenv("AUDIT_TABLE_NAME");
+        if (tableName == null || tableName.isEmpty()) {
+            tableName = System.getProperty("AUDIT_TABLE_NAME");
+        }
+        return tableName;
+    }
+
     @Override
     @Logging(logEvent = true)
     @Tracing
@@ -45,7 +53,8 @@ public class EventProcessorHandler implements RequestHandler<Map<String, Object>
             MDC.put("requestId", context.getAwsRequestId());
             LOGGER.info("Processing EventBridge event");
 
-            if (TABLE_NAME == null || TABLE_NAME.isEmpty()) {
+            String tableName = getTableName();
+            if (tableName == null || tableName.isEmpty()) {
                 LOGGER.error("AUDIT_TABLE_NAME environment variable not set");
                 return createErrorResponse("Configuration error");
             }
@@ -84,7 +93,7 @@ public class EventProcessorHandler implements RequestHandler<Map<String, Object>
 
             // Write to DynamoDB
             PutItemRequest putRequest = PutItemRequest.builder()
-                    .tableName(TABLE_NAME)
+                    .tableName(tableName)
                     .item(item)
                     .build();
 

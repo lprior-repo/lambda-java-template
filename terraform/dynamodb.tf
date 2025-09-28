@@ -1,8 +1,12 @@
 # DynamoDB Tables
 resource "aws_dynamodb_table" "products" {
   name         = "${local.function_base_name}-products"
-  billing_mode = "PAY_PER_REQUEST"
+  billing_mode = local.dynamodb_billing_mode
   hash_key     = "id"
+
+  # Provisioned capacity (only used when billing_mode is PROVISIONED)
+  read_capacity  = local.dynamodb_read_capacity
+  write_capacity = local.dynamodb_write_capacity
 
   attribute {
     name = "id"
@@ -18,6 +22,9 @@ resource "aws_dynamodb_table" "products" {
     name            = "name-index"
     hash_key        = "name"
     projection_type = "ALL"
+    # GSI capacity (only used when billing_mode is PROVISIONED)
+    read_capacity  = local.dynamodb_read_capacity
+    write_capacity = local.dynamodb_write_capacity
   }
 
   server_side_encryption {
@@ -33,9 +40,13 @@ resource "aws_dynamodb_table" "products" {
 
 resource "aws_dynamodb_table" "audit_logs" {
   name         = "${local.function_base_name}-audit-logs"
-  billing_mode = "PAY_PER_REQUEST"
+  billing_mode = local.dynamodb_billing_mode
   hash_key     = "event_id"
   range_key    = "timestamp"
+
+  # Provisioned capacity (only used when billing_mode is PROVISIONED)
+  read_capacity  = local.dynamodb_read_capacity
+  write_capacity = local.dynamodb_write_capacity
 
   attribute {
     name = "event_id"

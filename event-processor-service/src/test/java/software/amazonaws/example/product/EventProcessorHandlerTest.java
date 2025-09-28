@@ -38,6 +38,10 @@ class EventProcessorHandlerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        
+        // Set required environment variable for tests
+        System.setProperty("AUDIT_TABLE_NAME", TEST_TABLE_NAME);
+        
         eventProcessorHandler = new EventProcessorHandler(mockDynamoDbClient);
         
         // Mock context methods
@@ -413,16 +417,11 @@ class EventProcessorHandlerTest {
     }
 
     private void setEnvironmentVariable(String name, String value) {
-        // This is a simplified approach for testing
-        // In a real test, you might use @SetEnvironmentVariable from JUnit Pioneer
-        // or mock System.getenv() calls
-        try {
-            java.lang.reflect.Field field = EventProcessorHandler.class.getDeclaredField("TABLE_NAME");
-            field.setAccessible(true);
-            field.set(null, value);
-        } catch (Exception e) {
-            // For this test, we'll assume the environment variable is set
-            // In practice, you'd use a more robust mocking approach
+        // Set system property for testing (since we can't easily mock System.getenv())
+        if (value != null) {
+            System.setProperty(name, value);
+        } else {
+            System.clearProperty(name);
         }
     }
 }

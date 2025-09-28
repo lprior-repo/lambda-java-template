@@ -1,11 +1,28 @@
 #!/bin/bash
 set -e
 
-# Set GraalVM environment
-export JAVA_HOME=~/graalvm/graalvm-jdk-21
+# Detect and set GraalVM environment
+if [ -z "$JAVA_HOME" ]; then
+    # Try common GraalVM locations
+    if [ -d "~/graalvm/graalvm-jdk-21" ]; then
+        export JAVA_HOME=~/graalvm/graalvm-jdk-21
+    elif [ -d "/opt/hostedtoolcache/graalvm-jdk" ]; then
+        # GitHub Actions GraalVM setup
+        export JAVA_HOME=$(find /opt/hostedtoolcache/graalvm-jdk -name "graalvm-*" -type d | head -1)
+    elif command -v native-image >/dev/null 2>&1; then
+        # GraalVM already in PATH
+        echo "Using GraalVM from PATH: $(which native-image)"
+    else
+        echo "ERROR: GraalVM not found. Please install GraalVM or set JAVA_HOME"
+        exit 1
+    fi
+fi
+
 export PATH=$JAVA_HOME/bin:$PATH
 
 echo "Building GraalVM native Lambda functions..."
+echo "Using GraalVM: $JAVA_HOME"
+echo "Native image version: $(native-image --version || echo 'native-image not found')"
 
 # Function to build native image for a service
 build_native_lambda() {

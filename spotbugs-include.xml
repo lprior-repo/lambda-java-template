@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Security-focused SpotBugs rules for AWS Lambda Java template -->
+    
+    <!-- Security Rules - High Priority -->
+    <Match>
+        <Bug category="SECURITY"/>
+    </Match>
+    
+    <!-- SQL Injection -->
+    <Match>
+        <Bug pattern="SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE"/>
+    </Match>
+    
+    <!-- Hard-coded credentials -->
+    <Match>
+        <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
+    </Match>
+    <Match>
+        <Bug pattern="DMI_CONSTANT_DB_PASSWORD"/>
+    </Match>
+    
+    <!-- XSS and injection vulnerabilities -->
+    <Match>
+        <Bug pattern="XSS_REQUEST_PARAMETER_TO_SEND_ERROR"/>
+    </Match>
+    <Match>
+        <Bug pattern="XSS_REQUEST_PARAMETER_TO_JSP_WRITER"/>
+    </Match>
+    
+    <!-- Weak cryptography -->
+    <Match>
+        <Bug pattern="WEAK_MESSAGE_DIGEST_MD5"/>
+    </Match>
+    <Match>
+        <Bug pattern="WEAK_MESSAGE_DIGEST_SHA1"/>
+    </Match>
+    
+    <!-- Path traversal -->
+    <Match>
+        <Bug pattern="PATH_TRAVERSAL_IN"/>
+    </Match>
+    <Match>
+        <Bug pattern="PATH_TRAVERSAL_OUT"/>
+    </Match>
+    
+    <!-- Correctness Rules - High Priority -->
+    <Match>
+        <Bug category="CORRECTNESS"/>
+        <Rank value="1"/>
+        <Rank value="2"/>
+        <Rank value="3"/>
+    </Match>
+    
+    <!-- Null pointer dereference -->
+    <Match>
+        <Bug pattern="NP_DEREFERENCE_OF_READLINE_VALUE"/>
+    </Match>
+    <Match>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+    
+    <!-- Resource management -->
+    <Match>
+        <Bug pattern="OS_OPEN_STREAM"/>
+    </Match>
+    <Match>
+        <Bug pattern="OBL_UNSATISFIED_OBLIGATION"/>
+    </Match>
+    
+    <!-- Concurrency issues -->
+    <Match>
+        <Bug category="MT_CORRECTNESS"/>
+    </Match>
+    
+    <!-- Performance Rules - Medium Priority -->
+    <Match>
+        <Bug category="PERFORMANCE"/>
+        <Rank value="1"/>
+        <Rank value="2"/>
+    </Match>
+    
+    <!-- Inefficient string operations -->
+    <Match>
+        <Bug pattern="SBSC_USE_STRINGBUFFER_CONCATENATION"/>
+    </Match>
+    
+    <!-- Inefficient collections usage -->
+    <Match>
+        <Bug pattern="WMI_WRONG_MAP_ITERATOR"/>
+    </Match>
+    
+    <!-- Bad practice - critical issues only -->
+    <Match>
+        <Bug category="BAD_PRACTICE"/>
+        <Rank value="1"/>
+        <Rank value="2"/>
+    </Match>
+    
+    <!-- Exception handling -->
+    <Match>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+    <Match>
+        <Bug pattern="DE_MIGHT_IGNORE"/>
+    </Match>
+</FindBugsFilter>
