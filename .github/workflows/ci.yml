@@ -97,8 +97,9 @@ jobs:
           distribution: 'corretto'
           cache: maven
 
-      - name: Run checkstyle
-        run: mvn checkstyle:check
+      # Checkstyle removed as requested to streamline CI/CD pipeline
+      # - name: Run checkstyle
+      #   run: mvn checkstyle:check
 
 
 

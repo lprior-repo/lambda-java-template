@@ -92,7 +92,7 @@ logs/
 
 # Terraform
 terraform/.terraform/
-terraform/.terraform.lock.hcl
+# terraform/.terraform.lock.hcl  # Lock file should be committed for CI consistency
 terraform/terraform.tfstate*
 terraform/terraform.tfvars
 terraform/.terraform.tfstate.lock.info
