@@ -10,6 +10,9 @@ module "lambda_functions" {
   runtime       = each.value.runtime
   architectures = ["arm64"]
 
+  # Skip handler for native runtime (provided.al2)
+  skip_destroy = false
+
   create_package         = false
   local_existing_package = each.value.source_dir
 
@@ -73,6 +76,9 @@ module "lambda2" {
   runtime       = local.lambda_functions.lambda2.runtime
   architectures = ["arm64"]
 
+  # Skip handler for native runtime (provided.al2)
+  skip_destroy = false
+
   create_package         = false
   local_existing_package = local.lambda_functions.lambda2.source_dir
 
@@ -105,6 +111,9 @@ module "lambda3" {
   handler       = local.lambda_functions.lambda3.handler
   runtime       = local.lambda_functions.lambda3.runtime
   architectures = ["arm64"]
+
+  # Skip handler for native runtime (provided.al2)
+  skip_destroy = false
 
   create_package         = false
   local_existing_package = local.lambda_functions.lambda3.source_dir

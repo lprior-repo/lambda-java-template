@@ -82,11 +82,17 @@ jobs:
           chmod +x ../build-graalvm-native.sh
           ../build-graalvm-native.sh
 
+      - name: Copy native artifacts to build directory
+        run: |
+          mkdir -p build
+          find . -name "*-native.zip" -exec cp {} build/ \;
+          ls -la build/
+
       - name: Upload native build artifacts
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: native-lambda-packages
-          path: "**/*-native.zip"
+          path: "build/*-native.zip"
           retention-days: 30
 
   lint:

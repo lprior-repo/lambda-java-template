@@ -98,6 +98,13 @@ variable "write_capacity" {
   default     = 5
 }
 
+# Native deployment configuration
+variable "enable_native_deployment" {
+  description = "Enable GraalVM native deployment (provided.al2 runtime)"
+  type        = bool
+  default     = false
+}
+
 # Additional environment-specific tags
 variable "additional_tags" {
   description = "Additional tags for resources"

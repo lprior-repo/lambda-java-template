@@ -34,13 +34,13 @@ locals {
     }
   }
 
-  # Lambda functions configuration for Java product service with deployment packages
+  # Lambda functions configuration with conditional native/JVM deployment
   lambda_functions = {
     lambda1 = {
       name       = "${local.function_base_name}-lambda1"
-      source_dir = "../build/product-service.zip"
-      runtime    = "java21"
-      handler    = "software.amazonaws.example.product.ProductHandler::handleRequest"
+      source_dir = var.enable_native_deployment ? "../build/product-service-native.zip" : "../build/product-service.zip"
+      runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
+      handler    = var.enable_native_deployment ? "bootstrap" : "software.amazonaws.example.product.ProductHandler::handleRequest"
       routes = [
         { path = "/health", method = "GET", auth = false },
         { path = "/products", method = "GET", auth = true },
@@ -52,16 +52,16 @@ locals {
     }
     lambda2 = {
       name       = "${local.function_base_name}-lambda2"
-      source_dir = "../build/authorizer-service.zip"
-      runtime    = "java21"
-      handler    = "software.amazonaws.example.product.AuthorizerHandler::handleRequest"
+      source_dir = var.enable_native_deployment ? "../build/authorizer-service-native.zip" : "../build/authorizer-service.zip"
+      runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
+      handler    = var.enable_native_deployment ? "bootstrap" : "software.amazonaws.example.product.AuthorizerHandler::handleRequest"
       routes     = []
     }
     lambda3 = {
       name       = "${local.function_base_name}-lambda3"
-      source_dir = "../build/event-processor-service.zip"
-      runtime    = "java21"
-      handler    = "software.amazonaws.example.product.EventProcessorHandler::handleRequest"
+      source_dir = var.enable_native_deployment ? "../build/event-processor-service-native.zip" : "../build/event-processor-service.zip"
+      runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
+      handler    = var.enable_native_deployment ? "bootstrap" : "software.amazonaws.example.product.EventProcessorHandler::handleRequest"
       routes     = []
     }
   }
