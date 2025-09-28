@@ -172,8 +172,6 @@ resource "aws_cloudwatch_dashboard" "lambda_dashboard" {
       }
     ]
   })
-
-  tags = local.common_tags
 }
 
 # CloudWatch Alarms for Lambda Functions
@@ -441,8 +439,6 @@ resource "aws_cloudwatch_dashboard" "business_kpis" {
       }
     ]
   })
-
-  tags = local.common_tags
 }
 
 # Cost monitoring alarm
