@@ -1,0 +1,122 @@
+# Common Spring Boot configuration for all profiles
+spring:
+  application:
+    name: serverless-lambda-template
+  main:
+    lazy-initialization: false
+    web-application-type: none
+  
+# Common logging configuration
+logging:
+  level:
+    root: INFO
+    software.amazonaws.example: INFO
+    org.springframework: WARN
+    com.amazonaws: WARN
+    software.amazon.awssdk: WARN
+
+# AWS PowerTools configuration
+powertools:
+  service-name: ${POWERTOOLS_SERVICE_NAME:lambda-service}
+  log-level: ${POWERTOOLS_LOG_LEVEL:INFO}
+  metrics-namespace: ${POWERTOOLS_METRICS_NAMESPACE:LambdaMetrics}
+  trace-disabled: ${POWERTOOLS_TRACE_DISABLED:false}
+
+# Management/Actuator configuration
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      enabled: true
+    info:
+      enabled: true
+
+---
+# Development JVM Profile - optimized for fast development cycles
+spring:
+  config:
+    activate:
+      on-profile: dev-jvm
+  devtools:
+    restart:
+      enabled: true
+      additional-paths: 
+        - src/main/java
+        - src/main/resources
+    livereload:
+      enabled: true
+  main:
+    lazy-initialization: true # Faster startup in dev
+
+logging:
+  level:
+    root: DEBUG
+    software.amazonaws.example: DEBUG
+    org.springframework.cloud.function: DEBUG
+    
+# Enable more actuator endpoints in development
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    beans:
+      enabled: true
+    env:
+      enabled: true
+    configprops:
+      enabled: true
+
+---
+# Native AOT Profile - for AOT compilation testing
+spring:
+  config:
+    activate:
+      on-profile: native-aot
+  main:
+    lazy-initialization: false # Required for AOT
+  aot:
+    enabled: true
+
+logging:
+  level:
+    root: INFO
+    org.springframework.aot: DEBUG
+
+# Minimal actuator for native
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+---
+# Production Native Profile - optimized for Lambda production
+spring:
+  config:
+    activate:
+      on-profile: prod-native
+  main:
+    lazy-initialization: false
+    web-application-type: none
+
+logging:
+  level:
+    root: WARN
+    software.amazonaws.example: INFO
+
+# Minimal actuator for production
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      enabled: true

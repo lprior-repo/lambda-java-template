@@ -1,0 +1,27 @@
+[
+  {
+    "interfaces": [
+      "software.amazon.awssdk.services.dynamodb.DynamoDbClient"
+    ]
+  },
+  {
+    "interfaces": [
+      "software.amazon.awssdk.services.eventbridge.EventBridgeClient"
+    ]
+  },
+  {
+    "interfaces": [
+      "org.springframework.context.ApplicationContext"
+    ]
+  },
+  {
+    "interfaces": [
+      "org.springframework.beans.factory.BeanFactory"
+    ]
+  },
+  {
+    "interfaces": [
+      "org.springframework.boot.autoconfigure.AutoConfigurationImportSelector"
+    ]
+  }
+]

@@ -1,5 +1,36 @@
 # Step Functions State Machine for Order Processing Workflow
 
+# SNS topic for workflow failure notifications
+resource "aws_sns_topic" "workflow_failures" {
+  name = "${local.function_base_name}-workflow-failures"
+
+  tags = local.common_tags
+}
+
+# SNS topic policy to allow Step Functions to publish
+resource "aws_sns_topic_policy" "workflow_failures" {
+  arn = aws_sns_topic.workflow_failures.arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "states.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.workflow_failures.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
 # IAM role for Step Functions execution
 resource "aws_iam_role" "step_functions_role" {
   name = "${local.function_base_name}-step-functions-role"
@@ -56,6 +87,13 @@ resource "aws_iam_role_policy" "step_functions_lambda_policy" {
           "logs:DescribeLogGroups"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = aws_sns_topic.workflow_failures.arn
       }
     ]
   })
@@ -67,75 +105,110 @@ resource "aws_sfn_state_machine" "order_processing" {
   role_arn = aws_iam_role.step_functions_role.arn
 
   definition = jsonencode({
-    Comment = "Order Processing Workflow with parallel execution and error handling"
-    StartAt = "ValidateOrder"
+    Comment       = "Order Processing Workflow with JSONata, parallel execution, error handling, and redrive capability"
+    QueryLanguage = "JSONata"
+    StartAt       = "InitializeWorkflow"
     States = {
+      InitializeWorkflow = {
+        Type          = "Pass"
+        Comment       = "Initialize workflow variables and prepare input data"
+        QueryLanguage = "JSONata"
+        Assign = {
+          workflowId         = "{% $states.context.Execution.Name %}"
+          executionStartTime = "{% $now() %}"
+          originalInput      = "{% $states.input %}"
+        }
+        Output = "{% $states.input %}"
+        Next   = "ValidateOrder"
+      }
+
       ValidateOrder = {
-        Type     = "Task"
-        Resource = module.order_validation_lambda.lambda_function_arn
-        Next     = "CheckValidation"
+        Type           = "Task"
+        Comment        = "Validates order data and business rules"
+        Resource       = module.order_validation_lambda.lambda_function_arn
+        QueryLanguage  = "JSONata"
+        Arguments      = "{% {'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'items': $states.input.items, 'totalAmount': $states.input.totalAmount, 'paymentMethod': $states.input.paymentMethod, 'traceId': $workflowId} %}"
+        Output         = "{% $merge([$originalInput, {'validationResult': $states.result}]) %}"
+        TimeoutSeconds = "{% $states.input.timeoutSettings.validation ? $states.input.timeoutSettings.validation : 30 %}"
+        Next           = "CheckValidation"
         Retry = [
           {
             ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"]
             IntervalSeconds = 2
             MaxAttempts     = 3
             BackoffRate     = 2.0
+            JitterStrategy  = "FULL"
+          },
+          {
+            ErrorEquals     = ["States.Timeout"]
+            IntervalSeconds = 1
+            MaxAttempts     = 2
+            BackoffRate     = 1.5
           }
         ]
         Catch = [
           {
             ErrorEquals = ["States.ALL"]
-            Next        = "ValidationFailed"
-            ResultPath  = "$.error"
+            Output      = "{% $merge([$states.input, {'errorDetails': $states.errorOutput, 'failedState': $states.context.State.Name, 'executionName': $states.context.Execution.Name, 'isRedriveCandidate': true}]) %}"
+            Next        = "NotifyValidationFailure"
           }
         ]
       }
 
       CheckValidation = {
-        Type = "Choice"
+        Type          = "Choice"
+        Comment       = "Routes workflow based on validation results"
+        QueryLanguage = "JSONata"
         Choices = [
           {
-            Variable      = "$.isValid"
-            BooleanEquals = true
-            Next          = "ParallelProcessing"
+            Condition = "{% $states.input.validationResult.isValid = true %}"
+            Next      = "ParallelProcessing"
           }
         ]
         Default = "ValidationFailed"
       }
 
       ParallelProcessing = {
-        Type = "Parallel"
+        Type          = "Parallel"
+        Comment       = "Processes inventory check and payment in parallel for optimal performance"
+        QueryLanguage = "JSONata"
+        Arguments     = "{% $states.input %}"
         Branches = [
           {
             StartAt = "CheckInventory"
             States = {
               CheckInventory = {
-                Type     = "Task"
-                Resource = module.inventory_lambda.lambda_function_arn
-                End      = true
+                Type           = "Task"
+                Comment        = "Verifies product availability and reserves inventory"
+                Resource       = module.inventory_lambda.lambda_function_arn
+                QueryLanguage  = "JSONata"
+                Arguments      = "{% {'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'items': $states.input.items, 'traceId': $workflowId} %}"
+                Output         = "{% $merge([{'branchType': 'inventory'}, $states.result]) %}"
+                TimeoutSeconds = "{% $states.input.timeoutSettings.inventory ? $states.input.timeoutSettings.inventory : 60 %}"
+                End            = true
                 Retry = [
                   {
                     ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"]
                     IntervalSeconds = 1
                     MaxAttempts     = 3
                     BackoffRate     = 2.0
+                    JitterStrategy  = "FULL"
                   }
                 ]
                 Catch = [
                   {
                     ErrorEquals = ["States.ALL"]
-                    ResultPath  = "$.inventoryError"
+                    Output      = "{% {'branchType': 'inventory', 'availabilityStatus': 'ERROR', 'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'error': 'Inventory check failed', 'errorDetails': $states.errorOutput} %}"
                     Next        = "InventoryFailed"
                   }
                 ]
               }
               InventoryFailed = {
-                Type = "Pass"
-                Result = {
-                  availabilityStatus = "ERROR"
-                  error             = "Inventory check failed"
-                }
-                End = true
+                Type          = "Pass"
+                Comment       = "Handles inventory check failures gracefully"
+                QueryLanguage = "JSONata"
+                Output        = "{% $states.input %}"
+                End           = true
               }
             }
           },
@@ -143,89 +216,89 @@ resource "aws_sfn_state_machine" "order_processing" {
             StartAt = "ProcessPayment"
             States = {
               ProcessPayment = {
-                Type     = "Task"
-                Resource = module.payment_lambda.lambda_function_arn
-                End      = true
+                Type           = "Task"
+                Comment        = "Processes payment authorization and capture"
+                Resource       = module.payment_lambda.lambda_function_arn
+                QueryLanguage  = "JSONata"
+                Arguments      = "{% {'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'totalAmount': $states.input.totalAmount, 'paymentMethod': $states.input.paymentMethod, 'traceId': $workflowId} %}"
+                Output         = "{% $merge([{'branchType': 'payment'}, $states.result]) %}"
+                TimeoutSeconds = "{% $states.input.timeoutSettings.payment ? $states.input.timeoutSettings.payment : 45 %}"
+                End            = true
                 Retry = [
                   {
                     ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"]
                     IntervalSeconds = 1
                     MaxAttempts     = 2
                     BackoffRate     = 2.0
+                    JitterStrategy  = "FULL"
                   }
                 ]
                 Catch = [
                   {
                     ErrorEquals = ["States.ALL"]
-                    ResultPath  = "$.paymentError"
+                    Output      = "{% {'branchType': 'payment', 'paymentStatus': 'FAILED', 'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'error': 'Payment processing failed', 'errorDetails': $states.errorOutput} %}"
                     Next        = "PaymentFailed"
                   }
                 ]
               }
               PaymentFailed = {
-                Type = "Pass"
-                Result = {
-                  paymentStatus = "FAILED"
-                  error        = "Payment processing failed"
-                }
-                End = true
+                Type          = "Pass"
+                Comment       = "Handles payment processing failures gracefully"
+                QueryLanguage = "JSONata"
+                Output        = "{% $states.input %}"
+                End           = true
               }
             }
           }
         ]
-        Next = "EvaluateResults"
+        Output = "{% $merge([$originalInput, {'parallelResults': $states.result}]) %}"
+        Next   = "EvaluateResults"
         Catch = [
           {
             ErrorEquals = ["States.ALL"]
-            Next        = "ProcessingFailed"
-            ResultPath  = "$.parallelError"
+            Output      = "{% $merge([$states.input, {'errorDetails': $states.errorOutput, 'failedState': $states.context.State.Name, 'executionName': $states.context.Execution.Name, 'isRedriveCandidate': true}]) %}"
+            Next        = "NotifyProcessingFailure"
           }
         ]
       }
 
       EvaluateResults = {
-        Type = "Choice"
+        Type          = "Choice"
+        Comment       = "Evaluates parallel processing results to determine next action"
+        QueryLanguage = "JSONata"
+        Assign = {
+          inventoryResult = "{% $filter($states.input.parallelResults, function($v) { $v.branchType = 'inventory' })[0] %}"
+          paymentResult   = "{% $filter($states.input.parallelResults, function($v) { $v.branchType = 'payment' })[0] %}"
+        }
         Choices = [
           {
-            And = [
-              {
-                Variable      = "$[0].availabilityStatus"
-                StringEquals  = "AVAILABLE"
-              },
-              {
-                Variable      = "$[1].paymentStatus"
-                StringEquals  = "APPROVED"
-              }
-            ]
-            Next = "OrderSuccess"
+            Condition = "{% $inventoryResult.availabilityStatus = 'AVAILABLE' and $paymentResult.paymentStatus = 'APPROVED' %}"
+            Output    = "{% $merge([$states.input, {'finalStatus': 'SUCCESS', 'inventory': $inventoryResult, 'payment': $paymentResult}]) %}"
+            Next      = "OrderSuccess"
           },
           {
-            Variable      = "$[0].availabilityStatus"
-            StringEquals  = "OUT_OF_STOCK"
-            Next          = "InventoryUnavailable"
+            Condition = "{% $inventoryResult.availabilityStatus = 'OUT_OF_STOCK' %}"
+            Output    = "{% $merge([$states.input, {'finalStatus': 'INVENTORY_UNAVAILABLE', 'inventory': $inventoryResult, 'payment': $paymentResult}]) %}"
+            Next      = "InventoryUnavailable"
           },
           {
-            Variable      = "$[1].paymentStatus"
-            StringEquals  = "DECLINED"
-            Next          = "PaymentDeclined"
+            Condition = "{% $paymentResult.paymentStatus = 'DECLINED' %}"
+            Output    = "{% $merge([$states.input, {'finalStatus': 'PAYMENT_DECLINED', 'inventory': $inventoryResult, 'payment': $paymentResult}]) %}"
+            Next      = "PaymentDeclined"
           }
         ]
         Default = "ProcessingFailed"
       }
 
       OrderSuccess = {
-        Type = "Task"
-        Resource = module.notification_lambda.lambda_function_arn
-        Parameters = {
-          "orderId.$"        = "$[0].orderId"
-          "customerId.$"     = "$[0].customerId"
-          "totalAmount.$"    = "$[0].totalAmount"
-          "transactionId.$"  = "$[1].transactionId"
-          "reservationId.$"  = "$[0].reservationId"
-          "notificationType" = "ORDER_CONFIRMATION"
-          "message"         = "Your order has been confirmed and is being processed."
-        }
-        End = true
+        Type           = "Task"
+        Comment        = "Sends confirmation notification for successful orders"
+        Resource       = module.notification_lambda.lambda_function_arn
+        QueryLanguage  = "JSONata"
+        Arguments      = "{% {'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'totalAmount': $states.input.totalAmount, 'transactionId': $states.input.payment.transactionId, 'reservationId': $states.input.inventory.reservationId, 'notificationType': 'ORDER_CONFIRMATION', 'message': 'Your order has been confirmed and is being processed.', 'traceId': $workflowId} %}"
+        Output         = "{% $merge([$states.input, {'notificationResult': $states.result, 'completedAt': $now()}]) %}"
+        TimeoutSeconds = "{% $states.input.timeoutSettings.notification ? $states.input.timeoutSettings.notification : 30 %}"
+        End            = true
         Retry = [
           {
             ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"]
@@ -234,57 +307,120 @@ resource "aws_sfn_state_machine" "order_processing" {
             BackoffRate     = 2.0
           }
         ]
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"]
+            Output      = "{% $merge([$states.input, {'errorDetails': $states.errorOutput, 'failedState': $states.context.State.Name, 'executionName': $states.context.Execution.Name, 'isRedriveCandidate': true}]) %}"
+            Next        = "NotifyNotificationFailure"
+          }
+        ]
       }
 
       InventoryUnavailable = {
-        Type = "Task"
-        Resource = module.notification_lambda.lambda_function_arn
-        Parameters = {
-          "orderId.$"        = "$[0].orderId"
-          "customerId.$"     = "$[0].customerId"
-          "notificationType" = "INVENTORY_UNAVAILABLE"
-          "message"         = "Unfortunately, some items in your order are currently out of stock."
-          "unavailabilityReason.$" = "$[0].unavailabilityReason"
-        }
-        End = true
+        Type           = "Task"
+        Comment        = "Sends notification for inventory unavailable scenarios"
+        Resource       = module.notification_lambda.lambda_function_arn
+        QueryLanguage  = "JSONata"
+        Arguments      = "{% {'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'notificationType': 'INVENTORY_UNAVAILABLE', 'message': 'Unfortunately, some items in your order are currently out of stock.', 'unavailabilityReason': $states.input.inventory.unavailabilityReason, 'traceId': $workflowId} %}"
+        Output         = "{% $merge([$states.input, {'notificationResult': $states.result, 'completedAt': $now()}]) %}"
+        TimeoutSeconds = "{% $states.input.timeoutSettings.notification ? $states.input.timeoutSettings.notification : 30 %}"
+        End            = true
       }
 
       PaymentDeclined = {
-        Type = "Task"
-        Resource = module.notification_lambda.lambda_function_arn
-        Parameters = {
-          "orderId.$"        = "$[0].orderId"
-          "customerId.$"     = "$[0].customerId"
-          "notificationType" = "PAYMENT_FAILED"
-          "message"         = "Your payment could not be processed. Please try a different payment method."
-          "paymentError.$"   = "$[1].paymentError"
-        }
-        End = true
+        Type           = "Task"
+        Comment        = "Sends notification for payment declined scenarios"
+        Resource       = module.notification_lambda.lambda_function_arn
+        QueryLanguage  = "JSONata"
+        Arguments      = "{% {'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'notificationType': 'PAYMENT_FAILED', 'message': 'Your payment could not be processed. Please try a different payment method.', 'paymentError': $states.input.payment.paymentError, 'traceId': $workflowId} %}"
+        Output         = "{% $merge([$states.input, {'notificationResult': $states.result, 'completedAt': $now()}]) %}"
+        TimeoutSeconds = "{% $states.input.timeoutSettings.notification ? $states.input.timeoutSettings.notification : 30 %}"
+        End            = true
       }
 
       ValidationFailed = {
-        Type = "Task"
-        Resource = module.notification_lambda.lambda_function_arn
-        Parameters = {
-          "orderId.$"        = "$.orderId"
-          "customerId.$"     = "$.customerId"
-          "notificationType" = "ORDER_FAILED"
-          "message"         = "Your order could not be processed due to validation errors."
-          "validationErrors.$" = "$.validationErrors"
-        }
-        End = true
+        Type           = "Task"
+        Comment        = "Sends notification for validation failures"
+        Resource       = module.notification_lambda.lambda_function_arn
+        QueryLanguage  = "JSONata"
+        Arguments      = "{% {'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'notificationType': 'ORDER_FAILED', 'message': 'Your order could not be processed due to validation errors.', 'validationErrors': $states.input.validationResult.validationErrors, 'traceId': $workflowId} %}"
+        Output         = "{% $merge([$states.input, {'notificationResult': $states.result, 'completedAt': $now()}]) %}"
+        TimeoutSeconds = "{% $states.input.timeoutSettings.notification ? $states.input.timeoutSettings.notification : 30 %}"
+        End            = true
       }
 
       ProcessingFailed = {
-        Type = "Task"
-        Resource = module.notification_lambda.lambda_function_arn
-        Parameters = {
-          "orderId.$"        = "$.orderId"
-          "customerId.$"     = "$.customerId"
-          "notificationType" = "ORDER_FAILED"
-          "message"         = "Your order could not be processed due to a system error. Please try again later."
+        Type           = "Task"
+        Comment        = "Sends notification for general processing failures"
+        Resource       = module.notification_lambda.lambda_function_arn
+        QueryLanguage  = "JSONata"
+        Arguments      = "{% {'orderId': $states.input.orderId, 'customerId': $states.input.customerId, 'notificationType': 'ORDER_FAILED', 'message': 'Your order could not be processed due to a system error. Please try again later.', 'traceId': $workflowId} %}"
+        Output         = "{% $merge([$states.input, {'notificationResult': $states.result, 'completedAt': $now()}]) %}"
+        TimeoutSeconds = "{% $states.input.timeoutSettings.notification ? $states.input.timeoutSettings.notification : 30 %}"
+        End            = true
+      }
+
+      NotifyValidationFailure = {
+        Type          = "Task"
+        Comment       = "Notifies operations team of validation failures requiring potential redrive"
+        Resource      = "arn:aws:states:::sns:publish"
+        QueryLanguage = "JSONata"
+        Arguments = {
+          TopicArn = "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${local.function_base_name}-workflow-failures"
+          Subject  = "{% 'Order Processing Workflow Failure - Validation' %}"
+          Message  = "{% 'Workflow failed in validation phase. Execution: ' & $states.input.executionName & '. State: ' & $states.input.failedState & '. Error: ' & $states.input.errorDetails.Error & '. Order ID: ' & $states.input.orderId & '. Ready for redrive if needed.' %}"
         }
-        End = true
+        Next = "FailWorkflowDueToValidationError"
+      }
+
+      NotifyProcessingFailure = {
+        Type          = "Task"
+        Comment       = "Notifies operations team of processing failures requiring potential redrive"
+        Resource      = "arn:aws:states:::sns:publish"
+        QueryLanguage = "JSONata"
+        Arguments = {
+          TopicArn = "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${local.function_base_name}-workflow-failures"
+          Subject  = "{% 'Order Processing Workflow Failure - Processing' %}"
+          Message  = "{% 'Workflow failed in processing phase. Execution: ' & $states.input.executionName & '. State: ' & $states.input.failedState & '. Error: ' & $states.input.errorDetails.Error & '. Order ID: ' & $states.input.orderId & '. Ready for redrive from failure point.' %}"
+        }
+        Next = "FailWorkflowDueToProcessingError"
+      }
+
+      NotifyNotificationFailure = {
+        Type          = "Task"
+        Comment       = "Notifies operations team of notification failures requiring potential redrive"
+        Resource      = "arn:aws:states:::sns:publish"
+        QueryLanguage = "JSONata"
+        Arguments = {
+          TopicArn = "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${local.function_base_name}-workflow-failures"
+          Subject  = "{% 'Order Processing Workflow Failure - Notification' %}"
+          Message  = "{% 'Workflow failed in notification phase. Execution: ' & $states.input.executionName & '. State: ' & $states.input.failedState & '. Error: ' & $states.input.errorDetails.Error & '. Order ID: ' & $states.input.orderId & '. Order processing was successful but notification failed. Ready for redrive.' %}"
+        }
+        Next = "FailWorkflowDueToNotificationError"
+      }
+
+      FailWorkflowDueToValidationError = {
+        Type          = "Fail"
+        Comment       = "Terminates workflow due to validation error - redrive candidate"
+        QueryLanguage = "JSONata"
+        Error         = "{% $states.input.errorDetails.Error ? $states.input.errorDetails.Error : 'States.ValidationFailure' %}"
+        Cause         = "{% 'Workflow failed at validation state and is a redrive candidate. Order ID: ' & $states.input.orderId & '. Execution ARN: ' & $states.input.executionName & '. Failed State: ' & $states.input.failedState %}"
+      }
+
+      FailWorkflowDueToProcessingError = {
+        Type          = "Fail"
+        Comment       = "Terminates workflow due to processing error - redrive candidate"
+        QueryLanguage = "JSONata"
+        Error         = "{% $states.input.errorDetails.Error ? $states.input.errorDetails.Error : 'States.ProcessingFailure' %}"
+        Cause         = "{% 'Workflow failed at processing state and is a redrive candidate. Order ID: ' & $states.input.orderId & '. Execution ARN: ' & $states.input.executionName & '. Failed State: ' & $states.input.failedState %}"
+      }
+
+      FailWorkflowDueToNotificationError = {
+        Type          = "Fail"
+        Comment       = "Terminates workflow due to notification error - redrive candidate"
+        QueryLanguage = "JSONata"
+        Error         = "{% $states.input.errorDetails.Error ? $states.input.errorDetails.Error : 'States.NotificationFailure' %}"
+        Cause         = "{% 'Workflow failed at notification state and is a redrive candidate. Order ID: ' & $states.input.orderId & '. Execution ARN: ' & $states.input.executionName & '. Failed State: ' & $states.input.failedState %}"
       }
     }
   })

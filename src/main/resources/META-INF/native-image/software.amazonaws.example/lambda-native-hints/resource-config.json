@@ -1,0 +1,77 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "\\Qapplication.yml\\E"
+      },
+      {
+        "pattern": "\\Qapplication.properties\\E"
+      },
+      {
+        "pattern": "\\Qapplication-dev.yml\\E"
+      },
+      {
+        "pattern": "\\Qapplication-dev.properties\\E"
+      },
+      {
+        "pattern": "\\Qapplication-prod.yml\\E"
+      },
+      {
+        "pattern": "\\Qapplication-prod.properties\\E"
+      },
+      {
+        "pattern": "\\Qapplication-native.yml\\E"
+      },
+      {
+        "pattern": "\\Qapplication-native.properties\\E"
+      },
+      {
+        "pattern": "\\Qlogback-spring.xml\\E"
+      },
+      {
+        "pattern": "\\Qlogback.xml\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/spring.factories\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/spring/org.springframework.boot.actuate.autoconfigure.web.ManagementContextConfiguration.imports\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/spring-configuration-metadata.json\\E"
+      },
+      {
+        "pattern": "\\QMETA-INF/additional-spring-configuration-metadata.json\\E"
+      },
+      {
+        "pattern": "\\Qawssdk_config_override.json\\E"
+      },
+      {
+        "pattern": "\\Qcodecs/\\E"
+      },
+      {
+        "pattern": "\\Qmodels/\\E"
+      },
+      {
+        "pattern": "\\Qpaginators/\\E"
+      },
+      {
+        "pattern": "\\Qwaiters/\\E"
+      },
+      {
+        "pattern": "\\Qsoftware/amazon/awssdk/\\E"
+      }
+    ]
+  },
+  "bundles": [
+    {
+      "name": "org.springframework.boot.autoconfigure.AutoConfigurationImportSelector$AutoConfigurationGroup"
+    },
+    {
+      "name": "org.springframework.boot.context.properties.ConfigurationPropertiesBindingPostProcessor"
+    }
+  ]
+}

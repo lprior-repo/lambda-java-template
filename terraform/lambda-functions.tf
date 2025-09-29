@@ -8,23 +8,27 @@ module "lambda_functions" {
   description   = "Serverless function for ${each.key} endpoint"
   handler       = each.value.handler
   runtime       = each.value.runtime
-  architectures = ["arm64"]
+  architectures = ["x86_64"]
 
   # Skip handler for native runtime (provided.al2)
   skip_destroy = false
 
-  create_package         = false
-  local_existing_package = each.value.source_dir
+  create_package = false
+  s3_existing_package = {
+    bucket = aws_s3_bucket.lambda_artifacts.bucket
+    key    = "${each.key}/${basename(each.value.source_dir)}"
+  }
 
   timeout     = local.lambda_timeout
   memory_size = local.lambda_memory
 
   environment_variables = {
-    ENVIRONMENT         = local.environment
-    LOG_LEVEL           = "INFO"
-    PRODUCTS_TABLE_NAME = aws_dynamodb_table.products.name
-    AUDIT_TABLE_NAME    = aws_dynamodb_table.audit_logs.name
-    EVENT_BUS_NAME      = aws_cloudwatch_event_bus.app_events.name
+    ENVIRONMENT                      = local.environment
+    LOG_LEVEL                        = "INFO"
+    PRODUCTS_TABLE_NAME              = aws_dynamodb_table.products.name
+    AUDIT_TABLE_NAME                 = aws_dynamodb_table.audit_logs.name
+    EVENT_BUS_NAME                   = aws_cloudwatch_event_bus.app_events.name
+    SPRING_CLOUD_FUNCTION_DEFINITION = "productHandler"
   }
 
   # CloudWatch Logs
@@ -74,13 +78,16 @@ module "lambda2" {
   description   = "API Key authorizer for API Gateway"
   handler       = local.lambda_functions.lambda2.handler
   runtime       = local.lambda_functions.lambda2.runtime
-  architectures = ["arm64"]
+  architectures = ["x86_64"]
 
   # Skip handler for native runtime (provided.al2)
   skip_destroy = false
 
-  create_package         = false
-  local_existing_package = local.lambda_functions.lambda2.source_dir
+  create_package = false
+  s3_existing_package = {
+    bucket = aws_s3_bucket.lambda_artifacts.bucket
+    key    = "lambda2/${basename(local.lambda_functions.lambda2.source_dir)}"
+  }
 
   timeout     = local.lambda_timeout
   memory_size = 256 # Authorizer can use less memory
@@ -110,13 +117,16 @@ module "lambda3" {
   description   = "Process EventBridge events for audit logging"
   handler       = local.lambda_functions.lambda3.handler
   runtime       = local.lambda_functions.lambda3.runtime
-  architectures = ["arm64"]
+  architectures = ["x86_64"]
 
   # Skip handler for native runtime (provided.al2)
   skip_destroy = false
 
-  create_package         = false
-  local_existing_package = local.lambda_functions.lambda3.source_dir
+  create_package = false
+  s3_existing_package = {
+    bucket = aws_s3_bucket.lambda_artifacts.bucket
+    key    = "lambda3/${basename(local.lambda_functions.lambda3.source_dir)}"
+  }
 
   timeout     = local.lambda_timeout
   memory_size = 256 # Event processor can use less memory

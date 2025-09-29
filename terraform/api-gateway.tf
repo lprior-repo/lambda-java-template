@@ -73,31 +73,8 @@ resource "aws_apigatewayv2_route" "lambda" {
   authorizer_id      = each.value.auth ? aws_apigatewayv2_authorizer.api_key.id : null
 }
 
-# Step Functions integration for order processing workflow
-resource "aws_apigatewayv2_integration" "step_functions" {
-  api_id           = aws_apigatewayv2_api.api.id
-  integration_type = "AWS_PROXY"
-  integration_uri  = "arn:aws:apigateway:${var.aws_region}:states:action/StartExecution"
-
-  integration_method = "POST"
-  credentials_arn    = aws_iam_role.api_gateway_step_functions_role.arn
-
-  request_templates = {
-    "application/json" = jsonencode({
-      stateMachineArn = aws_sfn_state_machine.order_processing.arn
-      input           = "$util.escapeJavaScript($input.body)"
-    })
-  }
-}
-
-resource "aws_apigatewayv2_route" "step_functions_route" {
-  api_id    = aws_apigatewayv2_api.api.id
-  route_key = "POST /orders"
-  target    = "integrations/${aws_apigatewayv2_integration.step_functions.id}"
-
-  authorization_type = "CUSTOM"
-  authorizer_id      = aws_apigatewayv2_authorizer.api_key.id
-}
+# Step Functions integration will be added later
+# Currently commenting out due to API Gateway v2 limitations with Step Functions
 
 # IAM role for API Gateway to execute Step Functions
 resource "aws_iam_role" "api_gateway_step_functions_role" {

@@ -4,7 +4,7 @@ locals {
   project_name          = var.project_name
   environment           = var.is_ephemeral ? "ephemeral" : var.environment
   namespace             = var.namespace
-  ephemeral_environment = var.is_ephemeral
+  is_ephemeral_env = var.is_ephemeral
 
   # Computed values
   actual_namespace   = local.namespace != "" ? local.namespace : local.environment
@@ -38,9 +38,9 @@ locals {
   lambda_functions = {
     lambda1 = {
       name       = "${local.function_base_name}-lambda1"
-      source_dir = var.enable_native_deployment ? "../build/product-service-native.zip" : "../build/product-service.zip"
+      source_dir = var.enable_native_deployment ? "../build/product-service-native.zip" : "../build/product-service.jar"
       runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
-      handler    = var.enable_native_deployment ? "bootstrap" : "software.amazonaws.example.product.ProductHandler::handleRequest"
+      handler    = var.enable_native_deployment ? "bootstrap" : "software.amazonaws.example.product.SpringBootProductHandler"
       routes = [
         { path = "/health", method = "GET", auth = false },
         { path = "/products", method = "GET", auth = true },
@@ -54,14 +54,14 @@ locals {
       name       = "${local.function_base_name}-lambda2"
       source_dir = var.enable_native_deployment ? "../build/authorizer-service-native.zip" : "../build/authorizer-service.zip"
       runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
-      handler    = var.enable_native_deployment ? "bootstrap" : "software.amazonaws.example.product.AuthorizerHandler::handleRequest"
+      handler    = var.enable_native_deployment ? "bootstrap" : "org.springframework.cloud.function.adapter.aws.SpringBootStreamHandler"
       routes     = []
     }
     lambda3 = {
       name       = "${local.function_base_name}-lambda3"
       source_dir = var.enable_native_deployment ? "../build/event-processor-service-native.zip" : "../build/event-processor-service.zip"
       runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
-      handler    = var.enable_native_deployment ? "bootstrap" : "software.amazonaws.example.product.EventProcessorHandler::handleRequest"
+      handler    = var.enable_native_deployment ? "bootstrap" : "org.springframework.cloud.function.adapter.aws.SpringBootStreamHandler"
       routes     = []
     }
   }
@@ -72,6 +72,6 @@ locals {
     Environment = local.environment
     Namespace   = local.actual_namespace
     ManagedBy   = "terraform"
-    Ephemeral   = local.ephemeral_environment ? "true" : "false"
+    Ephemeral   = local.is_ephemeral_env ? "true" : "false"
   }, var.additional_tags)
 }

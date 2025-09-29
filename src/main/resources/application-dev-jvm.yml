@@ -1,0 +1,81 @@
+# Development JVM Profile Configuration
+# Optimized for fast feedback loops and hot reloading
+
+spring:
+  devtools:
+    restart:
+      enabled: true
+      poll-interval: 1000ms
+      quiet-period: 400ms
+      additional-paths:
+        - src/main/java
+        - src/main/resources
+        - src/main/webapp
+      exclude: "**/*.class,**/*.jar,**/*.war"
+    livereload:
+      enabled: true
+      port: 35729
+  main:
+    lazy-initialization: true
+    allow-bean-definition-overriding: true
+
+# Development-specific PowerTools configuration
+powertools:
+  service-name: ${POWERTOOLS_SERVICE_NAME:dev-lambda-service}
+  log-level: DEBUG
+  logger-sample-rate: 1.0 # Log all requests in dev
+  logger-log-event: true
+  metrics-capture-cold-start: true
+  trace-disabled: false
+  tracer-capture-response: true
+  tracer-capture-error: true
+
+# Enhanced logging for development
+logging:
+  level:
+    root: DEBUG
+    software.amazonaws.example: DEBUG
+    org.springframework: INFO
+    org.springframework.cloud.function: DEBUG
+    org.springframework.boot: INFO
+    org.springframework.web: DEBUG
+    com.amazonaws: INFO
+    software.amazon.awssdk: INFO
+    org.apache.http: WARN
+    io.netty: WARN
+
+# Full actuator for development debugging
+management:
+  endpoints:
+    enabled-by-default: true
+    web:
+      exposure:
+        include: "*"
+      base-path: /actuator
+  endpoint:
+    beans:
+      enabled: true
+    env:
+      enabled: true
+      show-values: always
+    configprops:
+      enabled: true
+      show-values: always
+    health:
+      enabled: true
+      show-details: always
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    loggers:
+      enabled: true
+    shutdown:
+      enabled: false # Safety in dev
+
+# Development feature flags
+feature-flags:
+  debug-mode: true
+  detailed-logging: true
+  performance-monitoring: true
+  cache-disabled: true

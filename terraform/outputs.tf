@@ -69,3 +69,8 @@ output "order_processing_endpoint" {
   description = "API Gateway endpoint for order processing workflow"
   value       = "${aws_apigatewayv2_api.api.api_endpoint}/orders"
 }
+
+output "lambda_artifacts_bucket_name" {
+  description = "Name of the S3 bucket for Lambda deployment artifacts"
+  value       = aws_s3_bucket.lambda_artifacts.bucket
+}

@@ -1,0 +1,57 @@
+# Native AOT Profile Configuration
+# Optimized for ahead-of-time compilation testing
+
+spring:
+  main:
+    lazy-initialization: false # Required for AOT processing
+    web-application-type: none
+  aot:
+    enabled: true
+    processing:
+      register-reflection-for-binding: true
+  devtools:
+    restart:
+      enabled: false # Not compatible with native
+
+# PowerTools optimized for AOT
+powertools:
+  service-name: ${POWERTOOLS_SERVICE_NAME:aot-lambda-service}
+  log-level: INFO
+  logger-sample-rate: 0.1
+  logger-log-event: false
+  metrics-capture-cold-start: true
+  trace-disabled: false
+
+# Conservative logging for AOT compilation
+logging:
+  level:
+    root: INFO
+    software.amazonaws.example: INFO
+    org.springframework: WARN
+    org.springframework.aot: DEBUG
+    org.springframework.nativex: DEBUG
+    org.graalvm: DEBUG
+    com.amazonaws: WARN
+    software.amazon.awssdk: WARN
+
+# Minimal actuator for AOT testing
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      enabled: true
+      show-details: when-authorized
+    info:
+      enabled: true
+
+# AOT-specific feature flags
+feature-flags:
+  debug-mode: false
+  detailed-logging: false
+  performance-monitoring: true
+  cache-enabled: true
+  native-optimizations: true

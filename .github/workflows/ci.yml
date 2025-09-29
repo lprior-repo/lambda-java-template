@@ -16,29 +16,8 @@ env:
   TERRAFORM_VERSION: '1.9.8'
 
 jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      functions: ${{ steps.changes.outputs.functions }}
-    steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed functions
-        id: changes
-        run: |
-          # Get list of all function directories (Maven modules ending with -service)
-          FUNCTIONS=$(find . -maxdepth 1 -name "*-service" -type d -exec basename {} \; | jq -R -s -c 'split("\n")[:-1]')
-          echo "functions=$FUNCTIONS" >> $GITHUB_OUTPUT
-          echo "Detected functions: $FUNCTIONS"
-
   build:
-    needs: detect-changes
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        function: ${{ fromJson(needs.detect-changes.outputs.functions) }}
 
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
@@ -50,23 +29,17 @@ jobs:
           distribution: 'corretto'
           cache: maven
 
-      - name: Run tests
-        working-directory: ${{ matrix.function }}
+      - name: Run tests and build packages
         run: |
-          mvn test
+          mvn clean test package -DskipTests
 
       # Coverage reports removed to streamline CI pipeline
       # - name: Upload coverage reports
       #   uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
       #   with:
-      #     name: coverage-report-${{ matrix.function }}
+      #     name: coverage-report
       #     path: "**/target/site/jacoco/"
       #     retention-days: 30
-
-      - name: Build JAR package
-        working-directory: ${{ matrix.function }}
-        run: |
-          mvn clean package -DskipTests
 
       - name: Set up GraalVM
         uses: graalvm/setup-graalvm@2f25c0caae5b220866f732832d5e3e29ff493338 # v1.2.3
@@ -77,15 +50,14 @@ jobs:
           native-image-job-reports: 'true'
 
       - name: Build native image
-        working-directory: ${{ matrix.function }}
         run: |
-          chmod +x ../build-graalvm-native.sh
-          ../build-graalvm-native.sh
+          chmod +x scripts/build-native.sh
+          scripts/build-native.sh
 
       - name: Copy native artifacts to build directory
         run: |
           mkdir -p build
-          find . -name "*-native.zip" -exec cp {} build/ \;
+          find src/ -name "*-native.zip" -exec cp {} build/ \;
           ls -la build/
 
       - name: Upload native build artifacts
@@ -163,7 +135,7 @@ jobs:
           path: ./
 
       - name: 🧪 Run Terratest
-        working-directory: tests
+        working-directory: infra-tests
         run: |
           go mod tidy
           go test -v -timeout 30m

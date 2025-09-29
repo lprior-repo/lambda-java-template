@@ -112,3 +112,40 @@ variable "additional_tags" {
   default     = {}
 }
 
+# Ephemeral environment configuration
+variable "developer_id" {
+  description = "Developer identifier for environment isolation"
+  type        = string
+  default     = ""
+  validation {
+    condition     = can(regex("^[a-z0-9-]*$", var.developer_id))
+    error_message = "Developer ID must contain only lowercase letters, numbers, and hyphens."
+  }
+}
+
+variable "branch_name" {
+  description = "Git branch name for environment isolation"
+  type        = string
+  default     = ""
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._/-]*$", var.branch_name))
+    error_message = "Branch name must contain only alphanumeric characters, periods, underscores, slashes, and hyphens."
+  }
+}
+
+variable "ephemeral_enabled" {
+  description = "Enable ephemeral environment resources"
+  type        = bool
+  default     = false
+}
+
+variable "auto_destroy_hours" {
+  description = "Hours after which ephemeral environment should be auto-destroyed"
+  type        = number
+  default     = 24
+  validation {
+    condition     = var.auto_destroy_hours >= 1 && var.auto_destroy_hours <= 168
+    error_message = "Auto destroy hours must be between 1 and 168 (1 week)."
+  }
+}
+

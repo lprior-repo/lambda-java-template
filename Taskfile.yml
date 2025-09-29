@@ -303,22 +303,44 @@ tasks:
     desc: Deploy to development environment
     cmds:
       - task: validate
-      - task: tf:apply
-        vars: {ENVIRONMENT: dev}
+      - task: build
+      - task: package
+      - ./scripts/deploy-lambda.sh --jvm --test
 
   deploy:staging:
     desc: Deploy to staging environment
     cmds:
       - task: validate
-      - task: tf:apply
-        vars: {ENVIRONMENT: staging}
+      - task: build
+      - task: package
+      - ./scripts/deploy-lambda.sh --jvm
 
   deploy:prod:
     desc: Deploy to production environment
     cmds:
       - task: validate
-      - task: tf:apply
-        vars: {ENVIRONMENT: prod}
+      - task: build
+      - task: package
+      - ./scripts/deploy-lambda.sh --jvm
+
+  deploy:native:
+    desc: Deploy native GraalVM functions
+    cmds:
+      - task: validate
+      - task: build:native
+      - ./scripts/deploy-lambda.sh --native --test
+
+  deploy:lambda:
+    desc: Deploy Lambda function code only (JVM)
+    deps: [build, package]
+    cmds:
+      - ./scripts/deploy-lambda.sh --jvm
+
+  deploy:lambda:native:
+    desc: Deploy Lambda function code only (Native)
+    deps: [build:native]
+    cmds:
+      - ./scripts/deploy-lambda.sh --native
 
   # 🧹 Cleanup
   clean:
@@ -466,4 +488,76 @@ tasks:
           echo "✅ Native image: build/hello-native"
         else
           echo "⚠️  GraalVM native-image not available"
+        fi
+
+  # 🌱 Ephemeral Development Environment
+  ephemeral:start:
+    desc: Create and deploy ephemeral development environment
+    cmds:
+      - |
+        DEVELOPER_ID="${DEVELOPER_ID:-$(whoami)}"
+        BRANCH_NAME="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)}"
+        echo "🌱 Starting ephemeral environment for developer: $DEVELOPER_ID, branch: $BRANCH_NAME"
+        cd terraform
+        terraform init
+        terraform plan -var-file=environments/ephemeral.tfvars -var="developer_id=$DEVELOPER_ID" -var="branch_name=$BRANCH_NAME"
+        terraform apply -var-file=environments/ephemeral.tfvars -var="developer_id=$DEVELOPER_ID" -var="branch_name=$BRANCH_NAME" -auto-approve
+        echo "✅ Ephemeral environment ready!"
+
+  ephemeral:status:
+    desc: Check status of ephemeral environment
+    dir: terraform
+    cmds:
+      - |
+        DEVELOPER_ID="${DEVELOPER_ID:-$(whoami)}"
+        BRANCH_NAME="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)}"
+        echo "🔍 Checking ephemeral environment for developer: $DEVELOPER_ID, branch: $BRANCH_NAME"
+        terraform show -json | jq -r '.values.outputs | to_entries[] | select(.key | startswith("ephemeral")) | "\(.key): \(.value.value)"'
+
+  ephemeral:deploy:
+    desc: Deploy code to existing ephemeral environment (JVM mode for fast development)
+    deps: [build, package]
+    cmds:
+      - |
+        DEVELOPER_ID="${DEVELOPER_ID:-$(whoami)}"
+        BRANCH_NAME="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)}"
+        ENV_PREFIX="lambda-java-template-ephemeral-$DEVELOPER_ID-$(echo $BRANCH_NAME | sed 's/[^a-zA-Z0-9-]/-/g')"
+        echo "🚀 Deploying to ephemeral environment: $ENV_PREFIX"
+        aws lambda update-function-code --function-name "$ENV_PREFIX-hello" --zip-file fileb://build/hello-lambda.jar || echo "Function not found - run ephemeral:start first"
+
+  ephemeral:logs:
+    desc: View logs from ephemeral environment
+    cmds:
+      - |
+        DEVELOPER_ID="${DEVELOPER_ID:-$(whoami)}"
+        BRANCH_NAME="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)}"
+        ENV_PREFIX="lambda-java-template-ephemeral-$DEVELOPER_ID-$(echo $BRANCH_NAME | sed 's/[^a-zA-Z0-9-]/-/g')"
+        LOG_GROUP="/aws/lambda/$ENV_PREFIX-hello"
+        echo "📋 Viewing logs for: $LOG_GROUP"
+        aws logs tail "$LOG_GROUP" --follow
+
+  ephemeral:destroy:
+    desc: Destroy ephemeral development environment
+    dir: terraform
+    cmds:
+      - |
+        DEVELOPER_ID="${DEVELOPER_ID:-$(whoami)}"
+        BRANCH_NAME="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)}"
+        echo "🗑️ Destroying ephemeral environment for developer: $DEVELOPER_ID, branch: $BRANCH_NAME"
+        terraform destroy -var-file=environments/ephemeral.tfvars -var="developer_id=$DEVELOPER_ID" -var="branch_name=$BRANCH_NAME" -auto-approve
+        echo "✅ Ephemeral environment destroyed!"
+
+  ephemeral:test:
+    desc: Run tests against ephemeral environment
+    cmds:
+      - |
+        DEVELOPER_ID="${DEVELOPER_ID:-$(whoami)}"
+        BRANCH_NAME="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)}"
+        ENV_PREFIX="lambda-java-template-ephemeral-$DEVELOPER_ID-$(echo $BRANCH_NAME | sed 's/[^a-zA-Z0-9-]/-/g')"
+        echo "🧪 Running tests against ephemeral environment: $ENV_PREFIX"
+        API_ENDPOINT=$(cd terraform && terraform output -raw ephemeral_api_endpoint 2>/dev/null || echo "not-found")
+        if [ "$API_ENDPOINT" != "not-found" ]; then
+          curl -f "$API_ENDPOINT/hello" && echo "\n✅ Ephemeral environment is responding"
+        else
+          echo "❌ Could not find ephemeral environment endpoint"
         fi
