@@ -10,8 +10,8 @@ function_memory  = 512
 function_timeout = 30
 
 # Development Lambda configuration
-enable_xray_tracing     = true
-log_retention_days      = 7
+enable_xray_tracing      = true
+log_retention_days       = 7
 enable_native_deployment = false
 
 # DynamoDB configuration for dev

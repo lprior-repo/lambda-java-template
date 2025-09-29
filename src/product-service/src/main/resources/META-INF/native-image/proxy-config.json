@@ -1,0 +1,9 @@
+[
+  ["java.util.Map"],
+  ["java.util.List"],
+  ["java.io.Serializable"],
+  ["com.fasterxml.jackson.databind.JsonDeserializer"],
+  ["com.fasterxml.jackson.databind.JsonSerializer"],
+  ["software.amazon.awssdk.services.dynamodb.DynamoDbClient"],
+  ["com.amazonaws.services.lambda.runtime.RequestHandler"]
+]

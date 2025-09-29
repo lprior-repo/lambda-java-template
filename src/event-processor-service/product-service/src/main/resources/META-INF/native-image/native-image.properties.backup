@@ -1,0 +1,109 @@
+# GraalVM Native Image Build Configuration for AWS Lambda
+# This file contains the configuration options for building the native image
+
+# Basic build configuration
+Args = --no-fallback \
+       --enable-http \
+       --enable-https \
+       --enable-url-protocols=http,https \
+       --enable-all-security-services \
+       --install-exit-handlers
+
+# AWS SDK specific configurations
+Args = --initialize-at-build-time=software.amazon.awssdk.utils.SystemSetting \
+       --initialize-at-build-time=software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient \
+       --initialize-at-build-time=software.amazon.awssdk.regions.Region \
+       --initialize-at-build-time=software.amazon.awssdk.regions.providers
+
+# Initialize AWS SDK logging at runtime to avoid conflicts
+Args = --initialize-at-run-time=org.slf4j \
+       --initialize-at-run-time=software.amazon.awssdk.utils.Logger
+
+# AWS CRT should be initialized at runtime
+Args = --initialize-at-run-time=software.amazon.awssdk.crt \
+       --initialize-at-run-time=software.amazon.awssdk.crt.http.HttpClientConnectionManager
+
+# Netty configuration for AWS SDK
+Args = --initialize-at-build-time=io.netty.util.concurrent.SucceededFuture \
+       --initialize-at-run-time=io.netty.handler.ssl \
+       --initialize-at-run-time=io.netty.channel.epoll \
+       --initialize-at-run-time=io.netty.channel.kqueue
+
+# Lambda runtime specific
+Args = --initialize-at-build-time=com.amazonaws.services.lambda.runtime.api.client
+
+# Jackson JSON processing
+Args = --initialize-at-build-time=com.fasterxml.jackson.core \
+       --initialize-at-build-time=com.fasterxml.jackson.databind \
+       --initialize-at-build-time=com.fasterxml.jackson.annotation
+
+# JVM and system libraries
+Args = --initialize-at-build-time=java.util.Random \
+       --initialize-at-build-time=java.lang.Math \
+       --initialize-at-build-time=java.util.UUID
+
+# Memory and performance optimizations
+Args = --gc=G1 \
+       -H:+ReportExceptionStackTraces \
+       -H:+PrintAnalysisCallTree
+
+# Enable monitoring and profiling support
+Args = --enable-monitoring=heapdump,jfr
+
+# Include resources
+Args = --include-resources='.*.json$' \
+       --include-resources='.*.properties$' \
+       --include-resources='.*.xml$' \
+       --include-resources='.*.yaml$' \
+       --include-resources='.*.yml$'
+
+# Optimize for size (Lambda has size constraints)
+Args = -H:+UnlockExperimentalVMOptions \
+       -H:+UseContainerSupport \
+       -H:+ReportUnsupportedElementsAtRuntime
+
+# Set the main class for Lambda custom runtime
+ImageName = product-service
+
+# Enable debug info for better stack traces in development
+Args = -H:+SourceLevelDebug \
+       -H:+TraceClassInitialization \
+       -H:+PrintClassInitialization
+
+# Security configurations
+Args = --allow-incomplete-classpath \
+       --report-unsupported-elements-at-runtime
+
+# Resource bundle configurations for internationalization
+Args = --include-resource-bundles=com.amazonaws \
+       --include-resource-bundles=software.amazon.awssdk
+
+# Optimize dead code elimination
+Args = -H:+RemoveUnusedSymbols \
+       -H:+DeleteLocalSymbols
+
+# Lambda specific optimizations
+Args = -H:+StaticExecutableWithDynamicLibC \
+       -H:+UseLowMemoryFootprint
+
+# Enable lambda-specific optimizations
+Args = -Djava.awt.headless=true \
+       -Dfile.encoding=UTF-8 \
+       -Duser.timezone=UTC \
+       -Djava.net.useSystemProxies=true
+
+# AWS Lambda environment optimizations
+Args = -Daws.region=${AWS_REGION:us-east-1} \
+       -Daws.lambda.runtime.api=${AWS_LAMBDA_RUNTIME_API:localhost:8080}
+
+# Reflection configuration
+Args = --enable-url-protocols=https \
+       --enable-all-security-services
+
+# Additional AWS SDK performance optimizations
+Args = -Daws.crt.memory.tracing=0 \
+       -Daws.crt.debugnative=false \
+       -Daws.crt.aws_trace_log_per_call=false
+
+# Final optimization flags
+Args = -march=compatibility

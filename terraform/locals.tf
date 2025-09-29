@@ -1,9 +1,9 @@
 locals {
   # Configuration
-  aws_region            = var.aws_region
-  project_name          = var.project_name
-  environment           = var.is_ephemeral ? "ephemeral" : var.environment
-  namespace             = var.namespace
+  aws_region       = var.aws_region
+  project_name     = var.project_name
+  environment      = var.is_ephemeral ? "ephemeral" : var.environment
+  namespace        = var.namespace
   is_ephemeral_env = var.is_ephemeral
 
   # Computed values

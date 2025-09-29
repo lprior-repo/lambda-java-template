@@ -84,9 +84,9 @@ resource "aws_dynamodb_table" "ephemeral_users" {
   }
 
   global_secondary_index {
-    name               = "EmailIndex"
-    hash_key           = "email"
-    projection_type    = "ALL"
+    name            = "EmailIndex"
+    hash_key        = "email"
+    projection_type = "ALL"
   }
 
   tags = merge(local.ephemeral_tags, {

@@ -1,0 +1,646 @@
+package software.amazonaws.example.product;
+
+import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.lambda.powertools.logging.Logging;
+import software.amazon.lambda.powertools.tracing.Tracing;
+import software.amazon.lambda.powertools.tracing.TracingUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Enhanced ProductHandler with AWS Lambda Powertools v2 integration.
+ * Features:
+ * - Structured JSON logging with correlation IDs and business context
+ * - X-Ray distributed tracing with custom annotations and metadata
+ * - Structured metrics via MDC for CloudWatch parsing (operation counts, latency, success rates)
+ * - Business dimensions: HTTP method, operation type, price ranges, result status
+ * - Performance tracking: request duration, database operation timing
+ */
+public class ProductHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGatewayV2HTTPResponse> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProductHandler.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String TABLE_NAME = System.getenv("PRODUCTS_TABLE_NAME");
+
+    private final ProductService productService;
+
+    public ProductHandler() {
+        DynamoDbClient dynamoDbClient = DynamoDbClient.builder().build();
+        ProductRepository productRepository = new ProductRepository(dynamoDbClient, TABLE_NAME);
+        this.productService = new ProductService(productRepository);
+    }
+
+    // Constructor for testing
+    public ProductHandler(ProductService productService) {
+        this.productService = productService;
+    }
+
+    @Override
+    @Logging(logEvent = true, clearState = true)
+    @Tracing(namespace = "ProductService")
+    public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent request, Context context) {
+        try {
+            String httpMethod = request != null && request.getRequestContext() != null && request.getRequestContext().getHttp() != null
+                ? request.getRequestContext().getHttp().getMethod() : null;
+            String path = request != null && request.getRequestContext() != null && request.getRequestContext().getHttp() != null
+                ? request.getRequestContext().getHttp().getPath() : null;
+
+            // Add structured logging context with Powertools v2 using MDC
+            MDC.put("operation", "handleRequest");
+            MDC.put("httpMethod", httpMethod);
+            MDC.put("path", path);
+            MDC.put("requestId", context.getAwsRequestId());
+            MDC.put("functionName", context.getFunctionName());
+            MDC.put("functionVersion", context.getFunctionVersion());
+            
+            // Add business context
+            if (request != null && request.getHeaders() != null) {
+                MDC.put("userAgent", request.getHeaders().get("user-agent"));
+                MDC.put("sourceIp", request.getHeaders().get("x-forwarded-for"));
+            }
+
+            // Enhanced X-Ray tracing with custom annotations and metadata
+            TracingUtils.putAnnotation("httpMethod", httpMethod != null ? httpMethod : "unknown");
+            TracingUtils.putAnnotation("path", path != null ? path : "/unknown");
+            TracingUtils.putAnnotation("functionName", context.getFunctionName());
+            TracingUtils.putAnnotation("functionVersion", context.getFunctionVersion());
+            
+            // Add metadata for detailed tracing
+            Map<String, Object> requestMetadata = new HashMap<>();
+            requestMetadata.put("requestId", context.getAwsRequestId());
+            requestMetadata.put("remainingTimeMs", context.getRemainingTimeInMillis());
+            if (request != null && request.getHeaders() != null) {
+                requestMetadata.put("userAgent", request.getHeaders().get("user-agent"));
+                requestMetadata.put("contentType", request.getHeaders().get("content-type"));
+            }
+            TracingUtils.putMetadata("request", requestMetadata);
+
+            // Business metrics via structured logging for CloudWatch parsing
+            MDC.put("metric.httpMethod", httpMethod != null ? httpMethod : "unknown");
+            MDC.put("metric.environment", System.getenv("ENVIRONMENT") != null ? System.getenv("ENVIRONMENT") : "dev");
+            MDC.put("metric.functionName", context.getFunctionName());
+            MDC.put("metric.functionVersion", context.getFunctionVersion());
+            MDC.put("metric.requestCount", "1");
+            MDC.put("metric.namespace", "ProductService");
+
+            LOGGER.info("Processing API request - method: {}, path: {}", httpMethod, path);
+
+            if (httpMethod == null) {
+                MDC.put("error", "missing_http_method");
+                LOGGER.error("HTTP method is null in request");
+                return createErrorResponse(400, "Bad Request", "HTTP method not found in request");
+            }
+
+            // Track request start time for latency metrics
+            long requestStartTime = System.currentTimeMillis();
+
+            APIGatewayV2HTTPResponse response = switch (httpMethod) {
+                case "GET" -> handleGetRequest(request, context, path);
+                case "POST" -> handleCreateProduct(request, context);
+                case "PUT" -> handleUpdateProduct(request, context);
+                case "DELETE" -> handleDeleteProduct(request, context);
+                default -> {
+                    LOGGER.warn("Unsupported HTTP method: {}, supported: GET,POST,PUT,DELETE", httpMethod);
+                    yield createErrorResponse(405, "Method Not Allowed", "HTTP method not supported");
+                }
+            };
+
+            // Track request latency and status metrics via structured logging
+            long requestDuration = System.currentTimeMillis() - requestStartTime;
+            MDC.put("metric.requestLatencyMs", String.valueOf(requestDuration));
+            MDC.put("metric.statusCode", String.valueOf(response.getStatusCode()));
+            
+            if (response.getStatusCode() >= 200 && response.getStatusCode() < 300) {
+                MDC.put("metric.successCount", "1");
+                MDC.put("metric.result", "success");
+            } else if (response.getStatusCode() >= 400 && response.getStatusCode() < 500) {
+                MDC.put("metric.clientErrorCount", "1");
+                MDC.put("metric.result", "client_error");
+            } else if (response.getStatusCode() >= 500) {
+                MDC.put("metric.serverErrorCount", "1");
+                MDC.put("metric.result", "server_error");
+            }
+
+            return response;
+
+        } catch (Exception e) {
+            // Enhanced error logging and metrics with structured logging
+            MDC.put("error", e.getClass().getSimpleName());
+            MDC.put("errorMessage", e.getMessage());
+            MDC.put("metric.exceptionCount", "1");
+            MDC.put("metric.exceptionType", e.getClass().getSimpleName());
+            MDC.put("metric.result", "exception");
+            
+            LOGGER.error("Error processing request: {}", e.getMessage(), e);
+            return createErrorResponse(500, "Internal Server Error", "An unexpected error occurred");
+        }
+        // Note: clearState=true on @Logging annotation automatically clears MDC
+    }
+
+    @Tracing(segmentName = "routeGetRequest", namespace = "ProductService")
+    private APIGatewayV2HTTPResponse handleGetRequest(APIGatewayV2HTTPEvent request, Context context, String path) {
+        // Route based on path (remove stage prefix if present)
+        String normalizedPath = path;
+        if (path != null && path.startsWith("/prod/")) {
+            normalizedPath = path.substring(5); // Remove "/prod"
+        }
+
+        MDC.put("normalizedPath", normalizedPath);
+        TracingUtils.putAnnotation("originalPath", path);
+        TracingUtils.putAnnotation("normalizedPath", normalizedPath);
+        
+        // Determine route type for tracing
+        String routeType = "unknown";
+        if (normalizedPath != null) {
+            if (normalizedPath.equals("/health")) {
+                routeType = "health";
+            } else if (normalizedPath.startsWith("/products/")) {
+                routeType = "getProduct";
+            } else if (normalizedPath.equals("/products")) {
+                routeType = "listProducts";
+            }
+        }
+        TracingUtils.putAnnotation("routeType", routeType);
+        TracingUtils.putMetadata("routing", Map.of("originalPath", path, "normalizedPath", normalizedPath, "routeType", routeType));
+        
+        // Track routing metrics
+        
+        LOGGER.info("Routing GET request - originalPath: {}, normalizedPath: {}", path, normalizedPath);
+
+        if (normalizedPath != null && normalizedPath.equals("/health")) {
+            return handleHealthCheck(request, context);
+        } else if (normalizedPath != null && normalizedPath.startsWith("/products/")) {
+            return handleGetProduct(request, context);
+        } else if (normalizedPath != null && normalizedPath.equals("/products")) {
+            return handleListProducts(request, context);
+        } else {
+            TracingUtils.putAnnotation("result", "not_found");
+            TracingUtils.putMetadata("error", Map.of("type", "route_not_found", "path", normalizedPath));
+            LOGGER.warn("Endpoint not found: {}, available endpoints: /health, /products, /products/{{id}}", normalizedPath);
+            return createErrorResponse(404, "Not Found", "Endpoint not found: " + normalizedPath);
+        }
+    }
+
+    @Tracing(segmentName = "healthCheck", namespace = "ProductService")
+    private APIGatewayV2HTTPResponse handleHealthCheck(APIGatewayV2HTTPEvent request, Context context) {
+        MDC.put("operation", "healthCheck");
+        TracingUtils.putAnnotation("operation", "healthCheck");
+        TracingUtils.putAnnotation("service", "product-service");
+        
+        // Track health check metrics via structured logging
+        MDC.put("metric.operation", "healthCheck");
+        MDC.put("metric.healthCheckCount", "1");
+        
+        LOGGER.info("Processing health check");
+        
+        String timestamp = java.time.Instant.now().toString();
+        Map<String, Object> healthResponse = Map.of(
+            "status", "healthy",
+            "timestamp", timestamp,
+            "service", "product-service",
+            "runtime", "java21"
+        );
+        
+        TracingUtils.putMetadata("healthCheck", Map.of(
+            "status", "healthy",
+            "timestamp", timestamp,
+            "checkDuration", "fast"
+        ));
+        
+        return createSuccessResponse(200, healthResponse);
+    }
+
+    @Tracing(segmentName = "listProducts", namespace = "ProductService")
+    private APIGatewayV2HTTPResponse handleListProducts(APIGatewayV2HTTPEvent request, Context context) {
+        try {
+            MDC.put("operation", "listProducts");
+            TracingUtils.putAnnotation("operation", "listProducts");
+            
+            // Track list operation metrics
+            MDC.put("metric.operation", "listProducts");
+            MDC.put("metric.listProductsCount", "1");
+            
+            LOGGER.info("Listing all products");
+            
+            // Service call with performance tracking
+            long startTime = System.currentTimeMillis();
+            ProductListResponse productList = productService.getAllProducts();
+            long duration = System.currentTimeMillis() - startTime;
+            
+            TracingUtils.putAnnotation("queryDurationMs", String.valueOf(duration));
+            TracingUtils.putMetadata("performance", Map.of("durationMs", duration, "recordCount", productList.getProducts().size()));
+            
+            int productCount = productList.getProducts().size();
+            MDC.put("productCount", String.valueOf(productCount));
+            MDC.put("metric.queryDurationMs", String.valueOf(duration));
+            MDC.put("metric.productsReturned", String.valueOf(productCount));
+            MDC.put("metric.queryType", "getAllProducts");
+            
+            TracingUtils.putAnnotation("productCount", String.valueOf(productCount));
+            TracingUtils.putMetadata("response", Map.of("productCount", productCount, "operation", "listProducts"));
+            
+            LOGGER.info("Successfully retrieved {} products", productCount);
+            
+            return createSuccessResponse(200, productList);
+        } catch (Exception e) {
+            MDC.put("error", e.getClass().getSimpleName());
+            TracingUtils.putAnnotation("error", e.getClass().getSimpleName());
+            TracingUtils.putMetadata("error", Map.of("type", e.getClass().getSimpleName(), "message", e.getMessage()));
+            
+            // Track error metrics
+            
+            LOGGER.error("Error listing products: {}", e.getMessage(), e);
+            return createErrorResponse(500, "Internal Server Error", "Failed to list products");
+        }
+    }
+
+    @Tracing(segmentName = "getProduct", namespace = "ProductService")
+    private APIGatewayV2HTTPResponse handleGetProduct(APIGatewayV2HTTPEvent request, Context context) {
+        try {
+            String path = request.getRequestContext().getHttp().getPath();
+            String normalizedPath = path;
+            if (path != null && path.startsWith("/prod/")) {
+                normalizedPath = path.substring(5); // Remove "/prod"
+            }
+            
+            // Path parsing with tracing
+            TracingUtils.putAnnotation("originalPath", path);
+            TracingUtils.putAnnotation("normalizedPath", normalizedPath);
+            String productId = extractProductIdFromPath(normalizedPath);
+            
+            if (productId == null) {
+                MDC.put("error", "invalid_product_id");
+                TracingUtils.putAnnotation("error", "invalid_product_id");
+                TracingUtils.putMetadata("validation", Map.of("path", normalizedPath, "error", "missing_product_id"));
+                
+                // Track validation error metrics
+                
+                LOGGER.warn("Product ID validation failed for path: {}", normalizedPath);
+                return createErrorResponse(400, "Bad Request", "Product ID is required");
+            }
+
+            MDC.put("operation", "getProduct");
+            MDC.put("productId", productId);
+            TracingUtils.putAnnotation("operation", "getProduct");
+            TracingUtils.putAnnotation("productId", productId);
+            
+            // Track get operation metrics
+            MDC.put("metric.operation", "getProduct");
+            MDC.put("metric.getProductCount", "1");
+            
+            LOGGER.info("Retrieving product: {}", productId);
+
+            // Database lookup with tracing and metrics
+            TracingUtils.putAnnotation("service", "ProductService");
+            TracingUtils.putAnnotation("method", "getProduct");
+            
+            long lookupStartTime = System.currentTimeMillis();
+            Optional<ProductResponse> product = productService.getProduct(productId);
+            long lookupDuration = System.currentTimeMillis() - lookupStartTime;
+            
+            // Track lookup performance
+            MDC.put("metric.lookupDurationMs", String.valueOf(lookupDuration));
+            
+            if (product.isEmpty()) {
+                TracingUtils.putAnnotation("result", "not_found");
+                TracingUtils.putMetadata("response", Map.of("status", "not_found", "productId", productId));
+                
+                // Track not found metrics
+                MDC.put("metric.productNotFoundCount", "1");
+                MDC.put("metric.lookupResult", "not_found");
+                
+                LOGGER.warn("Product not found: {}", productId);
+                return createErrorResponse(404, "Not Found", "Product not found");
+            }
+
+            TracingUtils.putAnnotation("result", "found");
+            TracingUtils.putMetadata("response", Map.of("status", "found", "productId", productId, "productName", product.get().getName()));
+            
+            // Track successful lookup metrics
+            MDC.put("metric.productFoundCount", "1");
+            MDC.put("metric.lookupResult", "found");
+            
+            LOGGER.info("Product retrieved successfully: {}", productId);
+            return createSuccessResponse(200, product.get());
+
+        } catch (IllegalArgumentException e) {
+            LOGGER.warn("Invalid product request: {}", e.getMessage());
+            return createErrorResponse(400, "Bad Request", e.getMessage());
+        } catch (Exception e) {
+            MDC.put("error", e.getClass().getSimpleName());
+            LOGGER.error("Error retrieving product: {}", e.getMessage(), e);
+            return createErrorResponse(500, "Internal Server Error", "Failed to retrieve product");
+        }
+    }
+
+    @Tracing(segmentName = "createProduct", namespace = "ProductService")
+    private APIGatewayV2HTTPResponse handleCreateProduct(APIGatewayV2HTTPEvent request, Context context) {
+        try {
+            // Request parsing with tracing
+            TracingUtils.putAnnotation("operation", "parseCreateRequest");
+            TracingUtils.putMetadata("inputValidation", "parseCreateProductRequest");
+            
+            CreateProductRequest createRequest = OBJECT_MAPPER.readValue(request.getBody(), CreateProductRequest.class);
+
+            MDC.put("operation", "createProduct");
+            MDC.put("productName", createRequest.getName());
+            MDC.put("productPrice", createRequest.getPrice().toString());
+            
+            // Add tracing annotations for business metrics
+            TracingUtils.putAnnotation("productName", createRequest.getName());
+            TracingUtils.putAnnotation("productPrice", createRequest.getPrice().toString());
+            TracingUtils.putAnnotation("operation", "createProduct");
+            
+            // Track create operation metrics
+            MDC.put("metric.operation", "createProduct");
+            MDC.put("metric.createProductCount", "1");
+            MDC.put("metric.productPrice", createRequest.getPrice().toString());
+            MDC.put("metric.priceRange", getPriceRange(createRequest.getPrice().doubleValue()));
+            
+            // Add metadata for detailed analysis
+            Map<String, Object> productMetadata = new HashMap<>();
+            productMetadata.put("name", createRequest.getName());
+            productMetadata.put("price", createRequest.getPrice());
+            productMetadata.put("requestTimestamp", java.time.Instant.now().toString());
+            TracingUtils.putMetadata("productCreation", productMetadata);
+            
+            LOGGER.info("Creating product: {} with price: {}", createRequest.getName(), createRequest.getPrice());
+
+            // Service call with tracing and metrics
+            TracingUtils.putAnnotation("service", "ProductService");
+            TracingUtils.putAnnotation("method", "createProduct");
+            
+            long createStartTime = System.currentTimeMillis();
+            ProductResponse response = productService.createProduct(createRequest);
+            long createDuration = System.currentTimeMillis() - createStartTime;
+
+            // Track creation performance and success
+            MDC.put("metric.creationDurationMs", String.valueOf(createDuration));
+            MDC.put("metric.productCreatedSuccessCount", "1");
+
+            MDC.put("createdProductId", response.getId());
+            TracingUtils.putAnnotation("createdProductId", response.getId());
+            LOGGER.info("Product created successfully: {} - {}", response.getId(), response.getName());
+
+            return createSuccessResponse(201, response);
+
+        } catch (JsonProcessingException e) {
+            LOGGER.warn("Invalid JSON format in create request: {}", e.getMessage());
+            return createErrorResponse(400, "Bad Request", "Invalid JSON format");
+        } catch (IllegalArgumentException e) {
+            LOGGER.warn("Validation error in create request: {}", e.getMessage());
+            return createErrorResponse(400, "Bad Request", e.getMessage());
+        } catch (Exception e) {
+            MDC.put("error", e.getClass().getSimpleName());
+            LOGGER.error("Error creating product: {}", e.getMessage(), e);
+            return createErrorResponse(500, "Internal Server Error", "Failed to create product");
+        }
+    }
+
+    @Tracing(segmentName = "updateProduct", namespace = "ProductService")
+    private APIGatewayV2HTTPResponse handleUpdateProduct(APIGatewayV2HTTPEvent request, Context context) {
+        try {
+            String path = request.getRequestContext().getHttp().getPath();
+            String normalizedPath = path;
+            if (path != null && path.startsWith("/prod/")) {
+                normalizedPath = path.substring(5); // Remove "/prod"
+            }
+            
+            // Path validation with tracing
+            TracingUtils.putAnnotation("originalPath", path);
+            TracingUtils.putAnnotation("normalizedPath", normalizedPath);
+            String productId = extractProductIdFromPath(normalizedPath);
+            
+            if (productId == null) {
+                MDC.put("error", "invalid_product_id");
+                TracingUtils.putAnnotation("error", "invalid_product_id");
+                TracingUtils.putMetadata("validation", Map.of("path", normalizedPath, "error", "missing_product_id"));
+                LOGGER.warn("Product ID validation failed in update for path: {}", normalizedPath);
+                return createErrorResponse(400, "Bad Request", "Product ID is required");
+            }
+
+            // Request parsing with tracing
+            TracingUtils.putAnnotation("operation", "parseUpdateRequest");
+            UpdateProductRequest updateRequest = OBJECT_MAPPER.readValue(request.getBody(), UpdateProductRequest.class);
+            
+            MDC.put("operation", "updateProduct");
+            MDC.put("productId", productId);
+            MDC.put("productName", updateRequest.getName());
+            MDC.put("productPrice", updateRequest.getPrice().toString());
+            
+            TracingUtils.putAnnotation("operation", "updateProduct");
+            TracingUtils.putAnnotation("productId", productId);
+            TracingUtils.putAnnotation("productName", updateRequest.getName());
+            TracingUtils.putAnnotation("productPrice", updateRequest.getPrice().toString());
+            
+            // Track update operation metrics
+            
+            Map<String, Object> updateMetadata = new HashMap<>();
+            updateMetadata.put("productId", productId);
+            updateMetadata.put("name", updateRequest.getName());
+            updateMetadata.put("price", updateRequest.getPrice());
+            updateMetadata.put("updateTimestamp", java.time.Instant.now().toString());
+            TracingUtils.putMetadata("productUpdate", updateMetadata);
+            
+            LOGGER.info("Updating product: {} - {} with price: {}", productId, updateRequest.getName(), updateRequest.getPrice());
+            
+            // Service call with tracing and metrics
+            TracingUtils.putAnnotation("service", "ProductService");
+            TracingUtils.putAnnotation("method", "updateProduct");
+            
+            long updateStartTime = System.currentTimeMillis();
+            Optional<ProductResponse> response = productService.updateProduct(productId, updateRequest);
+            long updateDuration = System.currentTimeMillis() - updateStartTime;
+
+            // Track update performance
+
+            if (response.isEmpty()) {
+                TracingUtils.putAnnotation("result", "not_found");
+                TracingUtils.putMetadata("response", Map.of("status", "not_found", "productId", productId));
+                
+                // Track not found for update
+                
+                LOGGER.warn("Product not found for update: {}", productId);
+                return createErrorResponse(404, "Not Found", "Product not found");
+            }
+
+            TracingUtils.putAnnotation("result", "updated");
+            TracingUtils.putMetadata("response", Map.of("status", "updated", "productId", productId, "productName", response.get().getName()));
+            
+            // Track successful update
+            
+            LOGGER.info("Product updated successfully: {}", productId);
+            return createSuccessResponse(200, response.get());
+
+        } catch (JsonProcessingException e) {
+            LOGGER.warn("Invalid JSON format in update request: {}", e.getMessage());
+            return createErrorResponse(400, "Bad Request", "Invalid JSON format");
+        } catch (IllegalArgumentException e) {
+            LOGGER.warn("Validation error in update request: {}", e.getMessage());
+            return createErrorResponse(400, "Bad Request", e.getMessage());
+        } catch (Exception e) {
+            MDC.put("error", e.getClass().getSimpleName());
+            LOGGER.error("Error updating product: {}", e.getMessage(), e);
+            return createErrorResponse(500, "Internal Server Error", "Failed to update product");
+        }
+    }
+
+    @Tracing(segmentName = "deleteProduct", namespace = "ProductService")
+    private APIGatewayV2HTTPResponse handleDeleteProduct(APIGatewayV2HTTPEvent request, Context context) {
+        try {
+            String path = request.getRequestContext().getHttp().getPath();
+            String normalizedPath = path;
+            if (path != null && path.startsWith("/prod/")) {
+                normalizedPath = path.substring(5); // Remove "/prod"
+            }
+            
+            // Path validation with tracing
+            TracingUtils.putAnnotation("originalPath", path);
+            TracingUtils.putAnnotation("normalizedPath", normalizedPath);
+            String productId = extractProductIdFromPath(normalizedPath);
+            
+            if (productId == null) {
+                MDC.put("error", "invalid_product_id");
+                TracingUtils.putAnnotation("error", "invalid_product_id");
+                TracingUtils.putMetadata("validation", Map.of("path", normalizedPath, "error", "missing_product_id"));
+                LOGGER.warn("Product ID validation failed in delete for path: {}", normalizedPath);
+                return createErrorResponse(400, "Bad Request", "Product ID is required");
+            }
+
+            MDC.put("operation", "deleteProduct");
+            MDC.put("productId", productId);
+            TracingUtils.putAnnotation("operation", "deleteProduct");
+            TracingUtils.putAnnotation("productId", productId);
+            
+            // Track delete operation metrics
+            
+            Map<String, Object> deleteMetadata = new HashMap<>();
+            deleteMetadata.put("productId", productId);
+            deleteMetadata.put("deleteTimestamp", java.time.Instant.now().toString());
+            TracingUtils.putMetadata("productDeletion", deleteMetadata);
+            
+            LOGGER.info("Deleting product: {}", productId);
+
+            // Service call with tracing and metrics
+            TracingUtils.putAnnotation("service", "ProductService");
+            TracingUtils.putAnnotation("method", "deleteProduct");
+            
+            long deleteStartTime = System.currentTimeMillis();
+            boolean deleted = productService.deleteProduct(productId);
+            long deleteDuration = System.currentTimeMillis() - deleteStartTime;
+            
+            // Track delete performance
+            TracingUtils.putAnnotation("deleteResult", String.valueOf(deleted));
+            
+            if (!deleted) {
+                TracingUtils.putAnnotation("result", "not_found");
+                TracingUtils.putMetadata("response", Map.of("status", "not_found", "productId", productId));
+                
+                // Track not found for delete
+                
+                LOGGER.warn("Product not found for deletion: {}", productId);
+                return createErrorResponse(404, "Not Found", "Product not found");
+            }
+
+            TracingUtils.putAnnotation("result", "deleted");
+            TracingUtils.putMetadata("response", Map.of("status", "deleted", "productId", productId));
+            
+            // Track successful delete
+            
+            LOGGER.info("Product deleted successfully: {}", productId);
+            return createSuccessResponse(204, null);
+
+        } catch (IllegalArgumentException e) {
+            LOGGER.warn("Validation error in delete request: {}", e.getMessage());
+            return createErrorResponse(400, "Bad Request", e.getMessage());
+        } catch (Exception e) {
+            MDC.put("error", e.getClass().getSimpleName());
+            LOGGER.error("Error deleting product: {}", e.getMessage(), e);
+            return createErrorResponse(500, "Internal Server Error", "Failed to delete product");
+        }
+    }
+
+    private String extractProductIdFromPath(String path) {
+        // Expected path format: /products/{id}
+        if (path == null || !path.startsWith("/products/")) {
+            return null;
+        }
+        String[] parts = path.split("/");
+        return parts.length >= 3 ? parts[2] : null;
+    }
+
+    /**
+     * Categorizes product prices into ranges for business metrics.
+     * Useful for tracking pricing distribution and trends.
+     */
+    private String getPriceRange(double price) {
+        if (price < 10.0) {
+            return "low";
+        } else if (price < 50.0) {
+            return "medium";
+        } else if (price < 100.0) {
+            return "high";
+        } else {
+            return "premium";
+        }
+    }
+
+    private APIGatewayV2HTTPResponse createSuccessResponse(int statusCode, Object body) {
+        APIGatewayV2HTTPResponse response = new APIGatewayV2HTTPResponse();
+        response.setStatusCode(statusCode);
+        
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Access-Control-Allow-Origin", "*");
+        headers.put("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        headers.put("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        response.setHeaders(headers);
+
+        if (body != null) {
+            try {
+                response.setBody(OBJECT_MAPPER.writeValueAsString(body));
+            } catch (JsonProcessingException e) {
+                LOGGER.error("Error serializing response body", e);
+                return createErrorResponse(500, "Internal Server Error", "Error creating response");
+            }
+        }
+
+        return response;
+    }
+
+    private APIGatewayV2HTTPResponse createErrorResponse(int statusCode, String error, String message) {
+        APIGatewayV2HTTPResponse response = new APIGatewayV2HTTPResponse();
+        response.setStatusCode(statusCode);
+        
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Access-Control-Allow-Origin", "*");
+        headers.put("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        headers.put("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        response.setHeaders(headers);
+
+        Map<String, String> errorBody = Map.of(
+            "error", error,
+            "message", message
+        );
+
+        try {
+            response.setBody(OBJECT_MAPPER.writeValueAsString(errorBody));
+        } catch (JsonProcessingException e) {
+            LOGGER.error("Error serializing error response", e);
+            response.setBody("{\"error\":\"Internal Server Error\",\"message\":\"Error creating error response\"}");
+        }
+
+        return response;
+    }
+}

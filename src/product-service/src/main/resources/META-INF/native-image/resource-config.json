@@ -1,0 +1,40 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": ".*\\.json$"
+      },
+      {
+        "pattern": ".*\\.properties$"
+      },
+      {
+        "pattern": ".*\\.xml$"
+      },
+      {
+        "pattern": ".*\\.yaml$"
+      },
+      {
+        "pattern": ".*\\.yml$"
+      },
+      {
+        "pattern": "META-INF/.*"
+      },
+      {
+        "pattern": "software/amazon/awssdk/.*"
+      },
+      {
+        "pattern": "com/amazonaws/.*"
+      }
+    ]
+  },
+  "bundles": [
+    {
+      "name": "com.amazonaws.partitions.endpoints",
+      "locales": [""]
+    },
+    {
+      "name": "software.amazon.awssdk.regions.internal.region",
+      "locales": [""]
+    }
+  ]
+}

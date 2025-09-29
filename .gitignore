@@ -105,9 +105,18 @@ samconfig.toml
 build/
 *.zip
 bootstrap
-product-service
 *-native.zip
 native-config/
+
+# Maven compiled output
+**/target/
+*.jar
+*.war
+*.class
+
+# Native Image outputs
+*-native
+native-executable
 
 # GraalVM Native Image specific
 *.so
