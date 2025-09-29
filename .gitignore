@@ -118,10 +118,31 @@ native-config/
 *-native
 native-executable
 
-# GraalVM Native Image specific
+# Build artifacts and deployment packages
+build/
+dist/
+*.zip
+*.tar.gz
+*.tgz
+
+# Compiled binaries
+*.exe
+*.bin
 *.so
-*.dylib
 *.dll
+*.dylib
+*.a
+*.lib
+
+# AWS deployment artifacts
+deployment-package/
+lambda-packages/
+*.deployment
+
+# OpenSpec - keep local but not in repository
+openspec/
+
+# GraalVM Native Image specific
 graal_isolate.h
 graal_isolate_dynamic.h
 *.o

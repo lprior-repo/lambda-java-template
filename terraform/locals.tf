@@ -34,13 +34,13 @@ locals {
     }
   }
 
-  # Lambda functions configuration with conditional native/JVM deployment
+  # Lambda functions configuration with GraalVM native compilation
   lambda_functions = {
-    lambda1 = {
-      name       = "${local.function_base_name}-lambda1"
-      source_dir = var.enable_native_deployment ? "../build/product-service-native.zip" : "../build/product-service.jar"
-      runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
-      handler    = var.enable_native_deployment ? "bootstrap" : "software.amazonaws.example.product.SpringBootProductHandler"
+    product_service = {
+      name       = "${local.function_base_name}-product-service"
+      source_dir = "../build/product-service-native.zip"
+      runtime    = "provided.al2"
+      handler    = "bootstrap"
       routes = [
         { path = "/health", method = "GET", auth = false },
         { path = "/products", method = "GET", auth = true },
@@ -50,18 +50,46 @@ locals {
         { path = "/products/{id}", method = "DELETE", auth = true }
       ]
     }
-    lambda2 = {
-      name       = "${local.function_base_name}-lambda2"
-      source_dir = var.enable_native_deployment ? "../build/authorizer-service-native.zip" : "../build/authorizer-service.zip"
-      runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
-      handler    = var.enable_native_deployment ? "bootstrap" : "org.springframework.cloud.function.adapter.aws.SpringBootStreamHandler"
+    authorizer_service = {
+      name       = "${local.function_base_name}-authorizer-service"
+      source_dir = "../build/authorizer-service-native.zip"
+      runtime    = "provided.al2"
+      handler    = "bootstrap"
       routes     = []
     }
-    lambda3 = {
-      name       = "${local.function_base_name}-lambda3"
-      source_dir = var.enable_native_deployment ? "../build/event-processor-service-native.zip" : "../build/event-processor-service.zip"
-      runtime    = var.enable_native_deployment ? "provided.al2" : "java21"
-      handler    = var.enable_native_deployment ? "bootstrap" : "org.springframework.cloud.function.adapter.aws.SpringBootStreamHandler"
+    event_processor_service = {
+      name       = "${local.function_base_name}-event-processor-service"
+      source_dir = "../build/event-processor-service-native.zip"
+      runtime    = "provided.al2"
+      handler    = "bootstrap"
+      routes     = []
+    }
+    payment_service = {
+      name       = "${local.function_base_name}-payment-service"
+      source_dir = "../build/payment-service-native.zip"
+      runtime    = "provided.al2"
+      handler    = "bootstrap"
+      routes     = []
+    }
+    order_validation_service = {
+      name       = "${local.function_base_name}-order-validation-service"
+      source_dir = "../build/order-validation-service-native.zip"
+      runtime    = "provided.al2"
+      handler    = "bootstrap"
+      routes     = []
+    }
+    inventory_service = {
+      name       = "${local.function_base_name}-inventory-service"
+      source_dir = "../build/inventory-service-native.zip"
+      runtime    = "provided.al2"
+      handler    = "bootstrap"
+      routes     = []
+    }
+    notification_service = {
+      name       = "${local.function_base_name}-notification-service"
+      source_dir = "../build/notification-service-native.zip"
+      runtime    = "provided.al2"
+      handler    = "bootstrap"
       routes     = []
     }
   }

@@ -41,18 +41,30 @@ jobs:
       #     path: "**/target/site/jacoco/"
       #     retention-days: 30
 
-      - name: Set up GraalVM
-        uses: graalvm/setup-graalvm@2f25c0caae5b220866f732832d5e3e29ff493338 # v1.2.3
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'graalvm'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          native-image-job-reports: 'true'
+      - name: Set up Docker for AWS Lambda Native Builds
+        run: |
+          docker --version
+          docker pull public.ecr.aws/lambda/provided:al2
 
-      - name: Build native image
+      - name: Build native image using AWS Lambda container
         run: |
           chmod +x scripts/build-native.sh
-          scripts/build-native.sh
+          # Use AWS Lambda container for consistent GLIBC compatibility
+          docker run --rm \
+            -v "$(pwd)":/workspace \
+            -w /workspace \
+            public.ecr.aws/lambda/provided:al2 \
+            bash -c "
+              yum update -y && \
+              yum install -y tar gzip which && \
+              curl -s 'https://get.sdkman.io' | bash && \
+              source ~/.sdkman/bin/sdkman-init.sh && \
+              sdk install java 21.0.2-graalce && \
+              sdk install maven && \
+              export JAVA_HOME=~/.sdkman/candidates/java/current && \
+              export PATH=\$JAVA_HOME/bin:\$PATH && \
+              ./scripts/build-native.sh
+            "
 
       - name: Copy native artifacts to build directory
         run: |
