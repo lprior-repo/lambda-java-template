@@ -288,10 +288,18 @@ tasks:
     desc: Validate AWS Lambda Powertools integration
     cmds:
       - echo "🔧 Validating Lambda Powertools integration..."
-      - grep -r "@Logging" product-service/src/ || echo "❌ Missing @Logging annotations"
-      - grep -r "@Tracing" product-service/src/ || echo "❌ Missing @Tracing annotations" 
-      - grep -r "TracingUtils" product-service/src/ || echo "❌ Missing TracingUtils usage"
-      - grep -r "MDC" product-service/src/ || echo "❌ Missing structured logging"
+      - |
+        # Auto-discover services and validate each
+        for service_dir in src/*/; do
+          service_name=$(basename "$service_dir")
+          if [ -d "$service_dir/src/" ]; then
+            echo "📦 Validating $service_name..."
+            grep -r "@Logging" "$service_dir/src/" || echo "❌ Missing @Logging annotations in $service_name"
+            grep -r "@Tracing" "$service_dir/src/" || echo "❌ Missing @Tracing annotations in $service_name" 
+            grep -r "TracingUtils" "$service_dir/src/" || echo "❌ Missing TracingUtils usage in $service_name"
+            grep -r "MDC" "$service_dir/src/" || echo "❌ Missing structured logging in $service_name"
+          fi
+        done
       - echo "✅ Lambda Powertools validation completed"
 
   validate:monitoring:
@@ -342,7 +350,7 @@ tasks:
     desc: Deploy native GraalVM functions
     cmds:
       - task: validate
-      - task: build:native
+      - task: graalvm:compile
       - ./scripts/deploy-lambda.sh --native --test
 
   deploy:lambda:
@@ -353,7 +361,7 @@ tasks:
 
   deploy:lambda:native:
     desc: Deploy Lambda function code only (Native)
-    deps: [build:native]
+    deps: [graalvm:compile]
     cmds:
       - ./scripts/deploy-lambda.sh --native
 

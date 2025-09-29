@@ -29,8 +29,8 @@
         <aws.lambda.java.events.version>3.15.0</aws.lambda.java.events.version>
         <aws.lambda.java.runtime.interface.client.version>2.5.1</aws.lambda.java.runtime.interface.client.version>
 
-        <!-- AWS Lambda Powertools v2 -->
-        <powertools.version>2.5.0</powertools.version>
+        <!-- AWS Lambda Powertools v1 (latest stable) -->
+        <powertools.version>1.18.0</powertools.version>
 
         <!-- AWS SDK v2 -->
         <aws.sdk.version>2.30.7</aws.sdk.version>
