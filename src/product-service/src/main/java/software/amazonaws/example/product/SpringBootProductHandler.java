@@ -38,16 +38,22 @@ public class SpringBootProductHandler implements Function<APIGatewayV2HTTPEvent,
     
     @Override
     public APIGatewayV2HTTPResponse apply(APIGatewayV2HTTPEvent request) {
+        Logger logger = LoggerFactory.getLogger(SpringBootProductHandler.class);
+        
+        // Handle null request
+        if (request == null) {
+            logger.error("Received null request");
+            return createErrorResponse(400, "Bad Request");
+        }
+        
         // Add correlation ID for request tracing
         String correlationId = request.getHeaders() != null 
             ? request.getHeaders().getOrDefault("x-correlation-id", UUID.randomUUID().toString())
             : UUID.randomUUID().toString();
         
-        Logger logger = LoggerFactory.getLogger(SpringBootProductHandler.class);
-        
         try {
             String httpMethod = request.getRequestContext().getHttp().getMethod();
-            String path = request.getRawPath();
+            String path = request.getRequestContext().getHttp().getPath();
             
             logger.info("Processing request: {} {} with correlationId: {}", httpMethod, path, correlationId);
             
@@ -78,9 +84,15 @@ public class SpringBootProductHandler implements Function<APIGatewayV2HTTPEvent,
             logger.info("Request processed successfully with status: {}", response.getStatusCode());
             return response;
             
+        } catch (JsonProcessingException e) {
+            logger.error("JSON processing error with correlationId: {}", correlationId, e);
+            return createErrorResponse(400, "Invalid JSON format");
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid argument with correlationId: {}", correlationId, e);
+            return createErrorResponse(400, e.getMessage());
         } catch (Exception e) {
             logger.error("Error processing request with correlationId: {}", correlationId, e);
-            return createErrorResponse(500, "Internal server error");
+            return createErrorResponse(500, "Internal Server Error");
         }
     }
     
@@ -91,13 +103,15 @@ public class SpringBootProductHandler implements Function<APIGatewayV2HTTPEvent,
         
         if (path.startsWith("/products/")) {
             String productId = extractProductId(path);
-            if (productId != null) {
+            if (productId != null && !productId.trim().isEmpty()) {
                 var product = productService.getProduct(productId);
                 if (product.isPresent()) {
                     return createSuccessResponse(product.get());
                 } else {
                     return createErrorResponse(404, "Product not found");
                 }
+            } else {
+                return createErrorResponse(400, "Invalid product ID");
             }
         }
         
@@ -122,7 +136,7 @@ public class SpringBootProductHandler implements Function<APIGatewayV2HTTPEvent,
     private APIGatewayV2HTTPResponse handlePutRequest(APIGatewayV2HTTPEvent request, String path) throws JsonProcessingException {
         if (path.startsWith("/products/")) {
             String productId = extractProductId(path);
-            if (productId != null) {
+            if (productId != null && !productId.trim().isEmpty()) {
                 UpdateProductRequest updateRequest = objectMapper.readValue(request.getBody(), UpdateProductRequest.class);
                 var product = productService.updateProduct(productId, updateRequest);
                 if (product.isPresent()) {
@@ -130,6 +144,8 @@ public class SpringBootProductHandler implements Function<APIGatewayV2HTTPEvent,
                 } else {
                     return createErrorResponse(404, "Product not found");
                 }
+            } else {
+                return createErrorResponse(400, "Invalid product ID");
             }
         }
         
@@ -139,13 +155,15 @@ public class SpringBootProductHandler implements Function<APIGatewayV2HTTPEvent,
     private APIGatewayV2HTTPResponse handleDeleteRequest(APIGatewayV2HTTPEvent request, String path) throws JsonProcessingException {
         if (path.startsWith("/products/")) {
             String productId = extractProductId(path);
-            if (productId != null) {
+            if (productId != null && !productId.trim().isEmpty()) {
                 boolean deleted = productService.deleteProduct(productId);
                 if (deleted) {
-                    return createSuccessResponse(Map.of("message", "Product deleted successfully"));
+                    return createNoContentResponse();
                 } else {
                     return createErrorResponse(404, "Product not found");
                 }
+            } else {
+                return createErrorResponse(400, "Invalid product ID");
             }
         }
         
@@ -171,6 +189,19 @@ public class SpringBootProductHandler implements Function<APIGatewayV2HTTPEvent,
         
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");
+        headers.put("Access-Control-Allow-Origin", "*");
+        headers.put("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        headers.put("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        response.setHeaders(headers);
+        
+        return response;
+    }
+    
+    private APIGatewayV2HTTPResponse createNoContentResponse() {
+        APIGatewayV2HTTPResponse response = new APIGatewayV2HTTPResponse();
+        response.setStatusCode(204);
+        
+        Map<String, String> headers = new HashMap<>();
         headers.put("Access-Control-Allow-Origin", "*");
         headers.put("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         headers.put("Access-Control-Allow-Headers", "Content-Type, Authorization");

@@ -339,10 +339,8 @@ class SpringBootProductHandlerTest {
             APIGatewayV2HTTPResponse response = handler.apply(request);
             
             // Then
-            assertThat(response.getStatusCode()).isEqualTo(200);
-            
-            Map<String, Object> body = objectMapper.readValue(response.getBody(), new TypeReference<Map<String, Object>>() {});
-            assertThat(body).containsEntry("message", "Product deleted successfully");
+            assertThat(response.getStatusCode()).isEqualTo(204);
+            assertThat(response.getBody()).isNullOrEmpty();
             
             verify(productService).deleteProduct(productId);
         }

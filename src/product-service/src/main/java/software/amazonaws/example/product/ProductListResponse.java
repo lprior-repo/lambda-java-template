@@ -1,5 +1,6 @@
 package software.amazonaws.example.product;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -14,7 +15,8 @@ public class ProductListResponse {
     @JsonProperty("products")
     private final List<ProductResponse> products;
 
-    public ProductListResponse(List<ProductResponse> products) {
+    @JsonCreator
+    public ProductListResponse(@JsonProperty("products") List<ProductResponse> products) {
         this.products = Objects.requireNonNull(products, "Products list cannot be null");
     }
 
