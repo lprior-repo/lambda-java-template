@@ -7,7 +7,7 @@ vars:
   PROJECT_NAME: lambda-java-template
   AWS_REGION: us-east-1
   ENVIRONMENT: dev
-  JAVA_VERSION: 17
+  JAVA_VERSION: 21
   MAVEN_OPTS: -Xmx2g
 
 env:
@@ -55,11 +55,26 @@ tasks:
     deps: [build]
     cmds:
       - mkdir -p build
-      - cp target/hello-lambda.jar build/
-      - cp target/users-lambda.jar build/
-      - echo "✅ Lambda JARs ready: build/hello-lambda.jar, build/users-lambda.jar"
+      - |
+        # Auto-discover and copy service JARs
+        for service_dir in src/*/; do
+          service_name=$(basename "$service_dir")
+          jar_file="$service_dir/target/$service_name.jar"
+          if [ -f "$jar_file" ]; then
+            cp "$jar_file" build/
+            echo "✅ Packaged: $service_name.jar"
+          fi
+        done
+        # Also check for any existing JAR files in main target
+        if [ -f "target/lambda-java-template.jar" ]; then
+          cp target/lambda-java-template.jar build/
+          echo "✅ Packaged: lambda-java-template.jar"
+        fi
+        echo "📦 All Lambda JARs ready in build/ directory"
+        ls -la build/*.jar 2>/dev/null || echo "⚠️  No JAR files found"
     sources:
       - target/*.jar
+      - src/*/target/*.jar
     generates:
       - build/*.jar
 
