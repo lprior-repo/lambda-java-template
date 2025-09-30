@@ -27,7 +27,8 @@ module "lambda_functions" {
     LOG_LEVEL                        = "INFO"
     PRODUCTS_TABLE_NAME              = aws_dynamodb_table.products.name
     AUDIT_TABLE_NAME                 = aws_dynamodb_table.audit_logs.name
-    SPRING_CLOUD_FUNCTION_DEFINITION = "productHandler"
+    SPRING_CLOUD_FUNCTION_DEFINITION = "springBootProductHandler"
+    MAIN_CLASS                       = "software.amazonaws.example.product.ProductApplication"
   }
 
   # CloudWatch Logs
@@ -80,7 +81,7 @@ module "lambda2" {
   create_package = false
   s3_existing_package = {
     bucket = aws_s3_bucket.lambda_artifacts.bucket
-    key    = "authorizer-service/${basename(local.lambda_functions.authorizer_service.source_dir)}"
+    key    = "authorizer_service/${basename(local.lambda_functions.authorizer_service.source_dir)}"
   }
 
   timeout     = local.lambda_timeout

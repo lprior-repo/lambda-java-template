@@ -40,7 +40,7 @@ locals {
       name       = "${local.function_base_name}-product-service"
       source_dir = "../build/product-service.jar"
       runtime    = "java21"
-      handler    = "software.amazonaws.example.product.SpringBootProductHandler::handleRequest"
+      handler    = "org.springframework.boot.loader.launch.JarLauncher"
       routes = [
         { path = "/health", method = "GET", auth = false },
         { path = "/products", method = "GET", auth = true },
