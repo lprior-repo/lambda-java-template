@@ -105,19 +105,59 @@ mvn test -Dtest="*IntegrationTest"
 ./scripts/run-e2e-tests.sh
 ```
 
-## 📊 Infrastructure Testing
+## 📊 Comprehensive Testing
 
-Comprehensive Terratest validation (15 test cases):
+### Infrastructure Testing with Terratest
+
+**Complete validation suite** with 25+ test cases covering terraform-aws-modules:
 
 ```bash
-cd infra-tests
-go test -v -timeout 15m -run TestLambdaIntegration
-# ✅ Lambda functions deployment
-# ✅ API Gateway configuration  
-# ✅ DynamoDB tables setup
-# ✅ IAM permissions validation
-# ✅ CloudWatch monitoring
+# Complete test suite (recommended)
+task validate
+# ✅ Unit tests (Java/Spring Boot)
+# ✅ Integration tests (AWS services) 
+# ✅ Infrastructure tests (Terratest)
+# ✅ Endpoint validation (API testing)
+
+# Individual test categories
+task terratest:modules        # terraform-aws-modules validation
+task terratest:endpoints      # API Gateway functionality 
+task terratest:security       # Security configuration
+task terratest:performance    # Performance benchmarks
 ```
+
+**Infrastructure Validation:**
+- ✅ **Lambda Functions** - Configuration, X-Ray tracing, IAM roles
+- ✅ **API Gateway** - Routes, integrations, CORS, authorizers
+- ✅ **DynamoDB Tables** - Encryption, GSI, point-in-time recovery
+- ✅ **CloudWatch** - Dashboards, alarms, log groups
+- ✅ **Security** - HTTPS enforcement, encryption, isolation
+- ✅ **terraform-aws-modules** - Module consistency and features
+
+### API Endpoint Testing
+
+**Comprehensive endpoint validation** with authentication testing:
+
+```bash
+# Validate all endpoints
+task test:endpoints
+
+# Tests performed:
+# ✅ Health endpoint (no auth)
+# ✅ Protected endpoints (auth required)
+# ✅ CRUD operations (products)
+# ✅ Error handling (404, 401)
+# ✅ Performance validation
+# ✅ Response format validation
+```
+
+### Performance Benchmarks
+
+| Test | Expected | Threshold |
+|------|----------|-----------|
+| Java Cold Start | < 30 seconds | First request |
+| Warm Requests | < 10 seconds | Subsequent requests |
+| Health Endpoint | < 5 seconds | Always |
 
 ## 🚀 CI/CD Pipeline
 

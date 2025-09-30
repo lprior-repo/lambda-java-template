@@ -5,27 +5,27 @@ output "product_service_function_arn" {
 
 output "api_gateway_url" {
   description = "URL of the API Gateway"
-  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}"
+  value       = module.api_gateway.api_endpoint
 }
 
 output "health_endpoint" {
   description = "Health endpoint URL"
-  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/health"
+  value       = "${module.api_gateway.api_endpoint}/health"
 }
 
 output "products_endpoint" {
   description = "Products endpoint URL"
-  value       = "https://${aws_apigatewayv2_api.api.id}.execute-api.${local.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.api.name}/products"
+  value       = "${module.api_gateway.api_endpoint}/products"
 }
 
 output "products_table_name" {
   description = "Name of the Products DynamoDB table"
-  value       = aws_dynamodb_table.products.name
+  value       = module.products_table.dynamodb_table_id
 }
 
 output "audit_logs_table_name" {
   description = "Name of the Audit Logs DynamoDB table"
-  value       = aws_dynamodb_table.audit_logs.name
+  value       = module.audit_logs_table.dynamodb_table_id
 }
 
 
@@ -48,5 +48,5 @@ output "sns_alerts_topic_arn" {
 
 output "lambda_artifacts_bucket_name" {
   description = "Name of the S3 bucket for Lambda deployment artifacts"
-  value       = aws_s3_bucket.lambda_artifacts.bucket
+  value       = module.lambda_artifacts_bucket.s3_bucket_id
 }

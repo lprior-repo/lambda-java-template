@@ -107,12 +107,86 @@ tasks:
 
   # 🧪 Infrastructure Testing
   terratest:
-    desc: 🧪 Run Terratest infrastructure tests
+    desc: 🧪 Run comprehensive Terratest infrastructure tests
     dir: infra-tests
     deps: [tf:apply]
     cmds:
       - go mod tidy
-      - go test -v -timeout 15m -run TestLambdaIntegration
+      - go test -v -timeout 20m -run TestLambdaIntegration
+
+  terratest:modules:
+    desc: 🧪 Run terraform-aws-modules validation tests
+    dir: infra-tests  
+    deps: [tf:apply]
+    cmds:
+      - go mod tidy
+      - go test -v -timeout 15m -run TestLambdaIntegration/Terraform_Modules_Validation
+
+  terratest:endpoints:
+    desc: 🧪 Test all API endpoints functionality
+    dir: infra-tests
+    deps: [tf:apply]
+    cmds:
+      - go mod tidy
+      - go test -v -timeout 10m -run TestLambdaIntegration/API_Gateway_Integration
+
+  terratest:security:
+    desc: 🧪 Run security configuration tests
+    dir: infra-tests
+    deps: [tf:apply]
+    cmds:
+      - go mod tidy
+      - go test -v -timeout 10m -run TestLambdaIntegration/Security_Configuration
+
+  terratest:performance:
+    desc: 🧪 Run performance validation tests
+    dir: infra-tests
+    deps: [tf:apply]
+    cmds:
+      - go mod tidy
+      - go test -v -timeout 5m -run TestLambdaIntegration/Performance_Validation
+
+  test:infra:
+    desc: 🧪 Complete infrastructure test suite (all validations)
+    cmds:
+      - echo "🧪 Running complete infrastructure test suite..."
+      - task: terratest:modules
+      - task: terratest:endpoints  
+      - task: terratest:security
+      - task: terratest:performance
+      - echo "✅ All infrastructure tests completed!"
+
+  test:endpoints:
+    desc: 🌐 Validate all API endpoints comprehensively
+    deps: [tf:apply]
+    cmds:
+      - echo "🌐 Running comprehensive endpoint validation..."
+      - ./scripts/validate-endpoints.sh
+      - echo "✅ Endpoint validation completed!"
+
+  validate:
+    desc: ✅ Complete validation suite (unit + integration + infrastructure + endpoints)
+    cmds:
+      - echo "🚀 Running complete validation suite..."
+      - task: test:unit
+      - task: test:integration
+      - task: test:infra
+      - task: test:endpoints
+      - echo "🎉 All validations passed! System is production-ready."
+
+  test:demo:
+    desc: 🎬 Demonstrate comprehensive testing capabilities
+    cmds:
+      - echo "🎬 Running testing capabilities demonstration..."
+      - ./scripts/test-demo.sh
+      - echo "✅ Testing demo completed!"
+
+  test:demo:interactive:
+    desc: 🎬 Interactive testing demo (pauses between commands)
+    cmds:
+      - echo "🎬 Running interactive testing demonstration..."
+      - ./scripts/test-demo.sh --demo
+      - echo "✅ Interactive testing demo completed!"
 
   # 🚀 Full Deployment
   deploy:

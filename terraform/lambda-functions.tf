@@ -15,7 +15,7 @@ module "lambda_functions" {
 
   create_package = false
   s3_existing_package = {
-    bucket = aws_s3_bucket.lambda_artifacts.bucket
+    bucket = module.lambda_artifacts_bucket.s3_bucket_id
     key    = "${each.key}/${basename(each.value.source_dir)}"
   }
 
@@ -25,8 +25,8 @@ module "lambda_functions" {
   environment_variables = {
     ENVIRONMENT                      = local.environment
     LOG_LEVEL                        = "INFO"
-    PRODUCTS_TABLE_NAME              = aws_dynamodb_table.products.name
-    AUDIT_TABLE_NAME                 = aws_dynamodb_table.audit_logs.name
+    PRODUCTS_TABLE_NAME              = module.products_table.dynamodb_table_id
+    AUDIT_TABLE_NAME                 = module.audit_logs_table.dynamodb_table_id
     SPRING_CLOUD_FUNCTION_DEFINITION = "springBootProductHandler"
     MAIN_CLASS                       = "software.amazonaws.example.product.ProductApplication"
   }
@@ -53,10 +53,10 @@ module "lambda_functions" {
         "dynamodb:Scan"
       ]
       resources = [
-        aws_dynamodb_table.products.arn,
-        "${aws_dynamodb_table.products.arn}/*",
-        aws_dynamodb_table.audit_logs.arn,
-        "${aws_dynamodb_table.audit_logs.arn}/*"
+        module.products_table.dynamodb_table_arn,
+        "${module.products_table.dynamodb_table_arn}/*",
+        module.audit_logs_table.dynamodb_table_arn,
+        "${module.audit_logs_table.dynamodb_table_arn}/*"
       ]
     }
   }
@@ -65,7 +65,7 @@ module "lambda_functions" {
 }
 
 # Authorizer Lambda (separate module since it doesn't need routes)
-module "lambda2" {
+module "lambda_authorizer" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
@@ -80,7 +80,7 @@ module "lambda2" {
 
   create_package = false
   s3_existing_package = {
-    bucket = aws_s3_bucket.lambda_artifacts.bucket
+    bucket = module.lambda_artifacts_bucket.s3_bucket_id
     key    = "authorizer_service/${basename(local.lambda_functions.authorizer_service.source_dir)}"
   }
 
@@ -112,14 +112,14 @@ resource "aws_lambda_permission" "api_gateway_lambda" {
   action        = "lambda:InvokeFunction"
   function_name = module.lambda_functions[each.key].lambda_function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.api.execution_arn}/*/*"
+  source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
 }
 
 # Lambda permission for authorizer
 resource "aws_lambda_permission" "authorizer" {
   statement_id  = "AllowExecutionFromAPIGateway-authorizer"
   action        = "lambda:InvokeFunction"
-  function_name = module.lambda2.lambda_function_name
+  function_name = module.lambda_authorizer.lambda_function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.api.execution_arn}/*/*"
+  source_arn    = "${module.api_gateway.api_execution_arn}/*/*"
 }

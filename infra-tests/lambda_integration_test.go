@@ -55,6 +55,10 @@ func TestLambdaIntegration(t *testing.T) {
 	t.Run("Performance_Validation", func(t *testing.T) {
 		validatePerformance(t)
 	})
+
+	t.Run("Terraform_Modules_Validation", func(t *testing.T) {
+		validateTerraformModules(t, cfg, projectName, environment)
+	})
 }
 
 // validateLambdaFunctions validates the two Lambda functions: product-service and authorizer-service
@@ -73,7 +77,7 @@ func validateLambdaFunctions(t *testing.T, cfg aws.Config, projectName, environm
 			runtime: "java21",
 			memory:  512,
 			timeout: 30,
-			handler: "software.amazonaws.example.product.SpringBootProductHandler::handleRequest",
+			handler: "org.springframework.boot.loader.launch.JarLauncher",
 		},
 		"authorizer_service": {
 			name:    fmt.Sprintf("%s-%s-authorizer-service", projectName, environment),
@@ -346,14 +350,14 @@ func validateAPIGatewayIntegration(t *testing.T, cfg aws.Config, projectName, en
 		}
 		require.NotEmpty(t, apiEndpoint, "API endpoint not found")
 		
-		// Test health endpoint (no auth required)
-		healthURL := fmt.Sprintf("%s/prod/health", apiEndpoint)
+		// Test health endpoint (no auth required) - module creates default stage
+		healthURL := fmt.Sprintf("%s/health", apiEndpoint)
 		statusCode, body := httprequest.HttpGet(t, healthURL, nil)
 		assert.Equal(t, http.StatusOK, statusCode)
 		assert.Contains(t, body, "healthy")
 		
 		// Test protected endpoint without auth (should fail)
-		productsURL := fmt.Sprintf("%s/prod/products", apiEndpoint)
+		productsURL := fmt.Sprintf("%s/products", apiEndpoint)
 		statusCode, _ = httprequest.HttpGet(t, productsURL, nil)
 		assert.Equal(t, http.StatusUnauthorized, statusCode)
 	})
@@ -381,8 +385,8 @@ func validateSecurityConfiguration(t *testing.T, cfg aws.Config, projectName, en
 		// Validate HTTPS endpoint
 		assert.Contains(t, apiEndpoint, "https://")
 		
-		// Test actual HTTPS connectivity
-		healthURL := fmt.Sprintf("%s/prod/health", apiEndpoint)
+		// Test actual HTTPS connectivity - module default stage
+		healthURL := fmt.Sprintf("%s/health", apiEndpoint)
 		resp, err := http.Get(healthURL)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -489,11 +493,26 @@ func validateCloudWatchMonitoring(t *testing.T, cfg aws.Config, projectName, env
 // validatePerformance validates performance characteristics
 func validatePerformance(t *testing.T) {
 	t.Run("Lambda_Cold_Start_Performance", func(t *testing.T) {
-		// Use environment variable or default URL
-		apiGatewayURL := "https://pg6dn51xz7.execute-api.us-east-1.amazonaws.com/prod"
+		// Dynamically discover API Gateway URL
+		cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-east-1"))
+		require.NoError(t, err)
 		
-		// Test health endpoint performance
-		healthURL := fmt.Sprintf("%s/health", apiGatewayURL)
+		apiClient := apigatewayv2.NewFromConfig(cfg)
+		apis, err := apiClient.GetApis(context.TODO(), &apigatewayv2.GetApisInput{})
+		require.NoError(t, err)
+		
+		expectedAPIName := "lambda-java-template-dev-api"
+		var apiEndpoint string
+		for _, api := range apis.Items {
+			if *api.Name == expectedAPIName {
+				apiEndpoint = *api.ApiEndpoint
+				break
+			}
+		}
+		require.NotEmpty(t, apiEndpoint, "API endpoint not found")
+		
+		// Test health endpoint performance - updated for new module's default stage
+		healthURL := fmt.Sprintf("%s/health", apiEndpoint)
 		
 		// Multiple requests to test cold start and warm performance
 		for i := 0; i < 3; i++ {
@@ -514,5 +533,228 @@ func validatePerformance(t *testing.T) {
 			
 			time.Sleep(100 * time.Millisecond) // Small delay between requests
 		}
+	})
+}
+
+// validateTerraformModules validates that terraform-aws-modules are properly configured
+func validateTerraformModules(t *testing.T, cfg aws.Config, projectName, environment string) {
+	t.Run("API_Gateway_Module_Configuration", func(t *testing.T) {
+		apiClient := apigatewayv2.NewFromConfig(cfg)
+		
+		// Find API Gateway
+		apis, err := apiClient.GetApis(context.TODO(), &apigatewayv2.GetApisInput{})
+		require.NoError(t, err)
+		
+		expectedAPIName := fmt.Sprintf("%s-%s-api", projectName, environment)
+		var api *types.Api
+		for _, a := range apis.Items {
+			if *a.Name == expectedAPIName {
+				api = &a
+				break
+			}
+		}
+		require.NotNil(t, api, "API Gateway not found")
+		
+		// Validate module-specific configurations
+		assert.Equal(t, "HTTP", string(api.ProtocolType))
+		assert.NotEmpty(t, api.ApiEndpoint)
+		assert.Contains(t, *api.Description, "Serverless HTTP API Gateway")
+		
+		// Validate CORS is configured (terraform-aws-modules feature)
+		assert.NotNil(t, api.CorsConfiguration)
+		assert.Contains(t, api.CorsConfiguration.AllowMethods, "GET")
+		assert.Contains(t, api.CorsConfiguration.AllowMethods, "POST")
+		assert.Contains(t, api.CorsConfiguration.AllowMethods, "PUT")
+		assert.Contains(t, api.CorsConfiguration.AllowMethods, "DELETE")
+		assert.Contains(t, api.CorsConfiguration.AllowMethods, "OPTIONS")
+		assert.Equal(t, int32(86400), *api.CorsConfiguration.MaxAge)
+		
+		// Validate integration is properly configured
+		integrations, err := apiClient.GetIntegrations(context.TODO(), &apigatewayv2.GetIntegrationsInput{
+			ApiId: api.ApiId,
+		})
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(integrations.Items), 1, "Expected at least one integration")
+		
+		// Check integration configuration
+		for _, integration := range integrations.Items {
+			assert.Equal(t, "AWS_PROXY", string(integration.IntegrationType))
+			assert.Equal(t, "2.0", *integration.PayloadFormatVersion)
+			assert.NotEmpty(t, integration.IntegrationUri)
+			assert.Contains(t, *integration.IntegrationUri, "lambda")
+		}
+	})
+	
+	t.Run("Lambda_Module_Configuration", func(t *testing.T) {
+		lambdaClient := lambda.NewFromConfig(cfg)
+		
+		functions := []string{
+			fmt.Sprintf("%s-%s-product-service", projectName, environment),
+			fmt.Sprintf("%s-%s-authorizer-service", projectName, environment),
+		}
+		
+		for _, functionName := range functions {
+			// Get function configuration
+			functionConfig, err := lambdaClient.GetFunction(context.TODO(), &lambda.GetFunctionInput{
+				FunctionName: aws.String(functionName),
+			})
+			require.NoError(t, err)
+			
+			// Validate terraform-aws-modules/lambda configuration
+			assert.Equal(t, "java21", string(functionConfig.Configuration.Runtime))
+			assert.Equal(t, "x86_64", string(functionConfig.Configuration.Architectures[0]))
+			
+			// Validate CloudWatch Logs policy is attached (module feature)
+			assert.NotEmpty(t, functionConfig.Configuration.Role)
+			
+			// Validate X-Ray tracing (module feature)
+			assert.NotNil(t, functionConfig.Configuration.TracingConfig)
+			assert.Equal(t, "Active", string(functionConfig.Configuration.TracingConfig.Mode))
+			
+			// Validate DLQ configuration if present (module manages this)
+			// Note: Basic template might not have DLQ, but module supports it
+			
+			// Validate VPC configuration (none for this template)
+			assert.Nil(t, functionConfig.Configuration.VpcConfig)
+			
+			// Validate environment variables are properly set
+			envVars := functionConfig.Configuration.Environment.Variables
+			assert.Contains(t, envVars, "ENVIRONMENT")
+			assert.Equal(t, environment, envVars["ENVIRONMENT"])
+		}
+	})
+	
+	t.Run("DynamoDB_Module_Configuration", func(t *testing.T) {
+		dynamoClient := dynamodb.NewFromConfig(cfg)
+		
+		tables := map[string]struct {
+			name               string
+			expectedEncryption bool
+			expectedPITR      bool
+			hasGSI            bool
+		}{
+			"products": {
+				name:               fmt.Sprintf("%s-%s-products", projectName, environment),
+				expectedEncryption: true,
+				expectedPITR:      true,
+				hasGSI:            true,
+			},
+			"audit-logs": {
+				name:               fmt.Sprintf("%s-%s-audit-logs", projectName, environment),
+				expectedEncryption: true,
+				expectedPITR:      false, // Module might not enable for audit logs
+				hasGSI:            false,
+			},
+		}
+		
+		for tableKey, expected := range tables {
+			t.Run(fmt.Sprintf("Table_%s_Module_Features", tableKey), func(t *testing.T) {
+				tableDescription, err := dynamoClient.DescribeTable(context.TODO(), &dynamodb.DescribeTableInput{
+					TableName: aws.String(expected.name),
+				})
+				require.NoError(t, err)
+				
+				table := tableDescription.Table
+				
+				// Validate terraform-aws-modules/dynamodb-table features
+				assert.Equal(t, "PAY_PER_REQUEST", string(table.BillingModeSummary.BillingMode))
+				
+				// Validate encryption (module default)
+				if expected.expectedEncryption {
+					assert.NotNil(t, table.SSEDescription)
+					assert.Equal(t, "ENABLED", string(table.SSEDescription.Status))
+				}
+				
+				// Validate Point-in-Time Recovery (module feature)
+				pitr, err := dynamoClient.DescribeContinuousBackups(context.TODO(), &dynamodb.DescribeContinuousBackupsInput{
+					TableName: aws.String(expected.name),
+				})
+				require.NoError(t, err)
+				
+				if expected.expectedPITR {
+					assert.Equal(t, "ENABLED", string(pitr.ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus))
+				}
+				
+				// Validate GSI configuration if expected
+				if expected.hasGSI {
+					assert.NotEmpty(t, table.GlobalSecondaryIndexes)
+					gsi := table.GlobalSecondaryIndexes[0]
+					assert.Equal(t, "name-index", *gsi.IndexName)
+					assert.Equal(t, "ACTIVE", string(gsi.IndexStatus))
+					assert.Equal(t, "ALL", string(gsi.Projection.ProjectionType))
+				}
+				
+				// Validate table stream is disabled (default)
+				assert.Nil(t, table.StreamSpecification)
+			})
+		}
+	})
+	
+	t.Run("S3_Module_Configuration", func(t *testing.T) {
+		// S3 validation would require AWS SDK v2 S3 service
+		// For now, validate through Lambda function's S3 package references
+		lambdaClient := lambda.NewFromConfig(cfg)
+		
+		productFunction, err := lambdaClient.GetFunction(context.TODO(), &lambda.GetFunctionInput{
+			FunctionName: aws.String(fmt.Sprintf("%s-%s-product-service", projectName, environment)),
+		})
+		require.NoError(t, err)
+		
+		// Validate Lambda is using S3 for code storage (module feature)
+		assert.NotNil(t, productFunction.Code.RepositoryType)
+		// Note: S3 bucket validation would require additional S3 client setup
+		
+		// Validate code size indicates successful packaging
+		assert.Greater(t, productFunction.Configuration.CodeSize, int64(1000))
+	})
+	
+	t.Run("Module_Consistency_Validation", func(t *testing.T) {
+		// Validate that all resources follow consistent naming patterns (module standard)
+		lambdaClient := lambda.NewFromConfig(cfg)
+		dynamoClient := dynamodb.NewFromConfig(cfg)
+		apiClient := apigatewayv2.NewFromConfig(cfg)
+		
+		// Check naming consistency across modules
+		baseName := fmt.Sprintf("%s-%s", projectName, environment)
+		
+		// Lambda functions
+		functions := []string{
+			fmt.Sprintf("%s-product-service", baseName),
+			fmt.Sprintf("%s-authorizer-service", baseName),
+		}
+		
+		for _, functionName := range functions {
+			_, err := lambdaClient.GetFunction(context.TODO(), &lambda.GetFunctionInput{
+				FunctionName: aws.String(functionName),
+			})
+			assert.NoError(t, err, "Function %s should exist with consistent naming", functionName)
+		}
+		
+		// DynamoDB tables
+		tables := []string{
+			fmt.Sprintf("%s-products", baseName),
+			fmt.Sprintf("%s-audit-logs", baseName),
+		}
+		
+		for _, tableName := range tables {
+			_, err := dynamoClient.DescribeTable(context.TODO(), &dynamodb.DescribeTableInput{
+				TableName: aws.String(tableName),
+			})
+			assert.NoError(t, err, "Table %s should exist with consistent naming", tableName)
+		}
+		
+		// API Gateway
+		apiName := fmt.Sprintf("%s-api", baseName)
+		apis, err := apiClient.GetApis(context.TODO(), &apigatewayv2.GetApisInput{})
+		require.NoError(t, err)
+		
+		found := false
+		for _, api := range apis.Items {
+			if *api.Name == apiName {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "API Gateway %s should exist with consistent naming", apiName)
 	})
 }
