@@ -360,7 +360,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 # Custom CloudWatch Metrics from Application Logs
 resource "aws_cloudwatch_log_metric_filter" "business_metrics" {
   name           = "${local.function_base_name}-business-metrics"
-  log_group_name = aws_cloudwatch_log_group.lambda_logs["lambda1"].name
+  log_group_name = aws_cloudwatch_log_group.lambda_logs["product_service"].name
   pattern        = "[timestamp, request_id, level=\"INFO\", message, fields]"
 
   metric_transformation {

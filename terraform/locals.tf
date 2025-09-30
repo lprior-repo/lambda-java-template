@@ -34,13 +34,13 @@ locals {
     }
   }
 
-  # Lambda functions configuration with GraalVM native compilation
+  # Lambda functions configuration
   lambda_functions = {
     product_service = {
       name       = "${local.function_base_name}-product-service"
-      source_dir = "../build/product-service-native.zip"
-      runtime    = "provided.al2"
-      handler    = "bootstrap"
+      source_dir = "../build/product-service.jar"
+      runtime    = "java21"
+      handler    = "software.amazonaws.example.product.SpringBootProductHandler::handleRequest"
       routes = [
         { path = "/health", method = "GET", auth = false },
         { path = "/products", method = "GET", auth = true },
@@ -52,44 +52,9 @@ locals {
     }
     authorizer_service = {
       name       = "${local.function_base_name}-authorizer-service"
-      source_dir = "../build/authorizer-service-native.zip"
-      runtime    = "provided.al2"
-      handler    = "bootstrap"
-      routes     = []
-    }
-    event_processor_service = {
-      name       = "${local.function_base_name}-event-processor-service"
-      source_dir = "../build/event-processor-service-native.zip"
-      runtime    = "provided.al2"
-      handler    = "bootstrap"
-      routes     = []
-    }
-    payment_service = {
-      name       = "${local.function_base_name}-payment-service"
-      source_dir = "../build/payment-service-native.zip"
-      runtime    = "provided.al2"
-      handler    = "bootstrap"
-      routes     = []
-    }
-    order_validation_service = {
-      name       = "${local.function_base_name}-order-validation-service"
-      source_dir = "../build/order-validation-service-native.zip"
-      runtime    = "provided.al2"
-      handler    = "bootstrap"
-      routes     = []
-    }
-    inventory_service = {
-      name       = "${local.function_base_name}-inventory-service"
-      source_dir = "../build/inventory-service-native.zip"
-      runtime    = "provided.al2"
-      handler    = "bootstrap"
-      routes     = []
-    }
-    notification_service = {
-      name       = "${local.function_base_name}-notification-service"
-      source_dir = "../build/notification-service-native.zip"
-      runtime    = "provided.al2"
-      handler    = "bootstrap"
+      source_dir = "../build/authorizer-service.jar"
+      runtime    = "java21"
+      handler    = "software.amazonaws.example.product.AuthorizerHandler::handleRequest"
       routes     = []
     }
   }

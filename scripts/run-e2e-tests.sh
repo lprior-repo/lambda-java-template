@@ -100,7 +100,7 @@ run_e2e_tests() {
     # Run only the end-to-end test class
     print_status "Executing Maven test with end-to-end test class..."
     
-    cd product-service
+    cd src/product-service
     
     # Run the specific test class
     if mvn test -Dtest=ProductApiEndToEndTest -q; then

@@ -70,11 +70,6 @@
     <modules>
         <module>src/product-service</module>
         <module>src/authorizer-service</module>
-        <module>src/event-processor-service</module>
-        <module>src/payment-service</module>
-        <module>src/order-validation-service</module>
-        <module>src/inventory-service</module>
-        <module>src/notification-service</module>
     </modules>
 
     <dependencyManagement>

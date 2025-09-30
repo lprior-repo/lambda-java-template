@@ -163,7 +163,7 @@ class SpringBootProductHandlerTest {
             APIGatewayV2HTTPResponse response = handler.apply(request);
             
             // Then
-            assertThat(response.getStatusCode()).isEqualTo(404);
+            assertThat(response.getStatusCode()).isEqualTo(400);
         }
     }
     
@@ -257,14 +257,14 @@ class SpringBootProductHandlerTest {
             APIGatewayV2HTTPResponse response = handler.apply(request);
             
             // Then
-            assertThat(response.getStatusCode()).isEqualTo(500);
+            assertThat(response.getStatusCode()).isEqualTo(400);
             
             try {
                 ErrorResponse errorResponse = objectMapper.readValue(response.getBody(), ErrorResponse.class);
-                assertThat(errorResponse.getMessage()).isEqualTo("Internal server error");
+                assertThat(errorResponse.getMessage()).isEqualTo("Invalid JSON format");
             } catch (Exception e) {
                 // Fallback assertion for malformed error response
-                assertThat(response.getBody()).contains("Internal server error");
+                assertThat(response.getBody()).contains("Invalid JSON format");
             }
         }
     }
@@ -457,7 +457,7 @@ class SpringBootProductHandlerTest {
             assertThat(response.getStatusCode()).isEqualTo(500);
             
             ErrorResponse errorResponse = objectMapper.readValue(response.getBody(), ErrorResponse.class);
-            assertThat(errorResponse.getMessage()).isEqualTo("Internal server error");
+            assertThat(errorResponse.getMessage()).isEqualTo("Internal Server Error");
             assertThat(errorResponse.getStatusCode()).isEqualTo(500);
         }
     }

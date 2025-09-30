@@ -117,16 +117,6 @@ resource "aws_dynamodb_table" "ephemeral_products" {
   deletion_protection_enabled = false
 }
 
-# EventBridge custom bus for ephemeral environment
-resource "aws_cloudwatch_event_bus" "ephemeral" {
-  count = var.ephemeral_enabled ? 1 : 0
-  name  = "${local.ephemeral_environment}-events"
-
-  tags = merge(local.ephemeral_tags, {
-    Name    = "${local.ephemeral_environment}-events"
-    Purpose = "ephemeral-development"
-  })
-}
 
 # CloudWatch Log Groups with shorter retention for cost optimization
 resource "aws_cloudwatch_log_group" "ephemeral_lambda_logs" {
@@ -160,10 +150,6 @@ output "ephemeral_dynamodb_tables" {
   } : null
 }
 
-output "ephemeral_event_bus" {
-  description = "EventBridge custom bus for ephemeral environment"
-  value       = var.ephemeral_enabled ? aws_cloudwatch_event_bus.ephemeral[0].name : null
-}
 
 output "ephemeral_log_groups" {
   description = "CloudWatch log groups for ephemeral Lambda functions"
@@ -273,19 +259,6 @@ resource "aws_iam_role_policy" "ephemeral_cleanup_policy" {
           "arn:aws:s3:::${local.ephemeral_environment}-*",
           "arn:aws:s3:::${local.ephemeral_environment}-*/*"
         ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "events:DeleteEventBus",
-          "events:ListEventBuses"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "events:Name" = "${local.ephemeral_environment}-*"
-          }
-        }
       }
     ]
   })

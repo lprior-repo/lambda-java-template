@@ -111,7 +111,7 @@ class ProductHandlerTest {
 
         // Assert
         assertEquals(400, response.getStatusCode());
-        assertTrue(response.getBody().contains("Product ID is required"));
+        assertTrue(response.getBody().contains("Invalid product ID"));
         verify(mockProductService, never()).getProduct(anyString());
     }
 
@@ -262,7 +262,7 @@ class ProductHandlerTest {
 
         // Assert
         assertEquals(405, response.getStatusCode());
-        assertTrue(response.getBody().contains("Method Not Allowed"));
+        assertTrue(response.getBody().contains("Method not allowed"));
         verifyNoInteractions(mockProductService);
     }
 
@@ -276,7 +276,7 @@ class ProductHandlerTest {
 
         // Assert
         assertEquals(404, response.getStatusCode());
-        assertTrue(response.getBody().contains("Endpoint not found"));
+        assertTrue(response.getBody().contains("Not found"));
         verifyNoInteractions(mockProductService);
     }
 

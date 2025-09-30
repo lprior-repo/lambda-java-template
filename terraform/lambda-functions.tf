@@ -27,7 +27,6 @@ module "lambda_functions" {
     LOG_LEVEL                        = "INFO"
     PRODUCTS_TABLE_NAME              = aws_dynamodb_table.products.name
     AUDIT_TABLE_NAME                 = aws_dynamodb_table.audit_logs.name
-    EVENT_BUS_NAME                   = aws_cloudwatch_event_bus.app_events.name
     SPRING_CLOUD_FUNCTION_DEFINITION = "productHandler"
   }
 
@@ -59,11 +58,6 @@ module "lambda_functions" {
         "${aws_dynamodb_table.audit_logs.arn}/*"
       ]
     }
-    eventbridge = {
-      effect    = "Allow"
-      actions   = ["events:PutEvents"]
-      resources = [aws_cloudwatch_event_bus.app_events.arn]
-    }
   }
 
   tags = local.common_tags
@@ -74,10 +68,10 @@ module "lambda2" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
-  function_name = local.lambda_functions.lambda2.name
+  function_name = local.lambda_functions.authorizer_service.name
   description   = "API Key authorizer for API Gateway"
-  handler       = local.lambda_functions.lambda2.handler
-  runtime       = local.lambda_functions.lambda2.runtime
+  handler       = local.lambda_functions.authorizer_service.handler
+  runtime       = local.lambda_functions.authorizer_service.runtime
   architectures = ["x86_64"]
 
   # Skip handler for native runtime (provided.al2)
@@ -86,7 +80,7 @@ module "lambda2" {
   create_package = false
   s3_existing_package = {
     bucket = aws_s3_bucket.lambda_artifacts.bucket
-    key    = "lambda2/${basename(local.lambda_functions.lambda2.source_dir)}"
+    key    = "authorizer-service/${basename(local.lambda_functions.authorizer_service.source_dir)}"
   }
 
   timeout     = local.lambda_timeout
@@ -108,55 +102,6 @@ module "lambda2" {
   tags = local.common_tags
 }
 
-# Event Processor Lambda (for EventBridge)
-module "lambda3" {
-  source  = "terraform-aws-modules/lambda/aws"
-  version = "~> 8.1"
-
-  function_name = local.lambda_functions.lambda3.name
-  description   = "Process EventBridge events for audit logging"
-  handler       = local.lambda_functions.lambda3.handler
-  runtime       = local.lambda_functions.lambda3.runtime
-  architectures = ["x86_64"]
-
-  # Skip handler for native runtime (provided.al2)
-  skip_destroy = false
-
-  create_package = false
-  s3_existing_package = {
-    bucket = aws_s3_bucket.lambda_artifacts.bucket
-    key    = "lambda3/${basename(local.lambda_functions.lambda3.source_dir)}"
-  }
-
-  timeout     = local.lambda_timeout
-  memory_size = 256 # Event processor can use less memory
-
-  environment_variables = {
-    ENVIRONMENT      = local.environment
-    LOG_LEVEL        = "INFO"
-    AUDIT_TABLE_NAME = aws_dynamodb_table.audit_logs.name
-  }
-
-  # CloudWatch Logs
-  attach_cloudwatch_logs_policy     = true
-  cloudwatch_logs_retention_in_days = local.log_retention
-
-  # X-Ray tracing
-  tracing_mode          = local.xray_tracing ? "Active" : "PassThrough"
-  attach_tracing_policy = local.xray_tracing
-
-  # DynamoDB permissions for audit logs
-  attach_policy_statements = true
-  policy_statements = {
-    dynamodb = {
-      effect    = "Allow"
-      actions   = ["dynamodb:PutItem", "dynamodb:UpdateItem"]
-      resources = [aws_dynamodb_table.audit_logs.arn]
-    }
-  }
-
-  tags = local.common_tags
-}
 
 # Lambda permissions for API Gateway
 resource "aws_lambda_permission" "api_gateway_lambda" {
