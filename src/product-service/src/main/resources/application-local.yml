@@ -1,0 +1,59 @@
+# Local development configuration for debugging
+# Run with: mvn spring-boot:run -Dspring-boot.run.profiles=local
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  profiles:
+    active: local
+  main:
+    web-application-type: servlet
+  cloud:
+    function:
+      web:
+        enabled: true
+      definition: springBootProductHandler
+
+# Local DynamoDB configuration
+aws:
+  region: us-east-1
+  dynamodb:
+    endpoint: http://localhost:8000
+  
+# Environment variables for local development
+ENVIRONMENT: local
+LOG_LEVEL: DEBUG
+PRODUCTS_TABLE_NAME: products-local
+AUDIT_TABLE_NAME: audit-logs-local
+
+# Enable debug logging
+logging:
+  level:
+    software.amazonaws.example: DEBUG
+    org.springframework.cloud.function: DEBUG
+    org.springframework.web: DEBUG
+    software.amazon.awssdk: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Development tools
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,loggers
+  endpoint:
+    health:
+      show-details: always
+
+# Hot reload configuration
+spring.devtools:
+  restart:
+    enabled: true
+    additional-paths: src/main/java
+  livereload:
+    enabled: true

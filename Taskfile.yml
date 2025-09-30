@@ -142,9 +142,62 @@ tasks:
       - task: clean
       - docker system prune -f
 
-  # 🏃 Development workflow
+  # 🏃 Local Development & Debugging
+  dev:local:
+    desc: 🏃 Start local development environment
+    cmds:
+      - echo "🚀 Starting local development environment..."
+      - docker-compose -f docker-compose.local.yml up -d
+      - sleep 5
+      - ./scripts/setup-local-dynamodb.sh
+      - echo "✅ Local environment ready! Run 'task dev:run' to start the app"
+
+  dev:run:
+    desc: 🔥 Run Spring Boot app locally for debugging (with hot reload)
+    dir: src/product-service
+    cmds:
+      - echo "🔥 Starting Spring Boot app with hot reload..."
+      - echo "🌐 App will be available at http://localhost:8080/api/products"
+      - echo "🔧 Set breakpoints in your IDE and attach debugger to port 5005"
+      - mvn spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+
+  dev:debug:
+    desc: 🐛 Run with remote debugging enabled (suspends until debugger attached)
+    dir: src/product-service
+    cmds:
+      - echo "🐛 Starting with remote debugging (waiting for debugger)..."
+      - echo "🔌 Attach your IDE debugger to localhost:5005"
+      - mvn spring-boot:run -Dspring-boot.run.profiles=local -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"
+
+  dev:test:
+    desc: 🧪 Test local API endpoints
+    cmds:
+      - echo "🧪 Testing local API endpoints..."
+      - echo "📊 Health check:"
+      - curl -s http://localhost:8080/api/health || echo "❌ Service not running"
+      - echo ""
+      - echo "📦 Get products:"
+      - curl -s http://localhost:8080/api/products | jq '.' || echo "❌ Products endpoint failed"
+
+  dev:stop:
+    desc: 🛑 Stop local development environment
+    cmds:
+      - echo "🛑 Stopping local development environment..."
+      - docker-compose -f docker-compose.local.yml down
+      - echo "✅ Local environment stopped"
+
+  dev:clean:
+    desc: 🧹 Clean local development data
+    cmds:
+      - echo "🧹 Cleaning local development data..."
+      - docker-compose -f docker-compose.local.yml down -v
+      - docker volume prune -f
+      - rm -rf local-data/
+      - echo "✅ Local data cleaned"
+
+  # 🏃 Full Development workflow
   dev:
-    desc: 🏃 Development workflow (test + native + deploy)
+    desc: 🏃 Full development workflow (test + native + deploy)
     cmds:
       - task: test
       - task: deploy:dev
