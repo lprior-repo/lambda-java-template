@@ -52,78 +52,44 @@ for service in "${SERVICES[@]}"; do
         continue
     fi
     
-    # Step 1: Build JAR with Spring Native AOT processing
-    echo -e "${YELLOW}  📦 Building JAR with Spring Native AOT...${NC}"
+    # Build native executable using Maven profile
+    echo -e "${YELLOW}  ⚡ Building native executable with Maven...${NC}"
     cd "$SERVICE_DIR"
     
     mvn clean package -Pnative -DskipTests -q
     
-    # Find the built JAR (handle version numbers)
-    JAR_FILE=$(find target -name "*.jar" -not -name "*.original" | head -1)
-    
-    if [ ! -f "$JAR_FILE" ]; then
-        echo -e "${RED}❌ JAR file not found for $service${NC}"
+    # Check if native executable was created
+    NATIVE_EXE="target/$service"
+    if [ ! -f "$NATIVE_EXE" ]; then
+        echo -e "${RED}❌ Native executable not found: $NATIVE_EXE${NC}"
         continue
     fi
     
-    echo -e "${GREEN}  ✅ JAR built: $(basename "$JAR_FILE")${NC}"
+    echo -e "${GREEN}  ✅ Native executable built: $(ls -lh "$NATIVE_EXE" | awk '{print $5}')${NC}"
     
-    # Step 2: Extract JAR for native compilation
-    echo -e "${YELLOW}  📂 Extracting JAR...${NC}"
-    cd target
-    rm -rf native-build && mkdir native-build && cd native-build
-    jar -xf "../$JAR_FILE"
-    
-    # Step 3: Build native executable
-    echo -e "${YELLOW}  ⚡ Building native executable...${NC}"
-    
-    # Use native-image with Spring Boot specific configuration
-    native-image \
-        --no-fallback \
-        --enable-http \
-        --enable-https \
-        --enable-url-protocols=http,https \
-        --enable-all-security-services \
-        --report-unsupported-elements-at-runtime \
-        --allow-incomplete-classpath \
-        --initialize-at-build-time=org.eclipse.jdt,org.apache.el,org.apache.tomcat \
-        --initialize-at-run-time=org.springframework.boot.logging.logback,io.netty.channel.unix \
-        -cp "." \
-        -H:+ReportExceptionStackTraces \
-        -H:+AddAllCharsets \
-        -H:EnableURLProtocols=http,https \
-        -H:Name="$service" \
-        -H:Class=org.springframework.boot.loader.launch.JarLauncher \
-        "$service"
-    
-    if [ ! -f "$service" ]; then
-        echo -e "${RED}❌ Native executable not created for $service${NC}"
-        continue
-    fi
-    
-    echo -e "${GREEN}  ✅ Native executable built${NC}"
-    
-    # Step 4: Create bootstrap script
-    echo -e "${YELLOW}  📜 Creating bootstrap script...${NC}"
-    cat > bootstrap << 'EOF'
+    # Check if assembly ZIP was created
+    ASSEMBLY_ZIP=$(find target -name "*-native.zip" | head -1)
+    if [ -f "$ASSEMBLY_ZIP" ]; then
+        echo -e "${GREEN}  ✅ Assembly ZIP found: $(basename "$ASSEMBLY_ZIP")${NC}"
+        cp "$ASSEMBLY_ZIP" "$BUILD_DIR/"
+    else
+        echo -e "${YELLOW}  📦 Creating deployment package manually...${NC}"
+        cd target
+        
+        # Create bootstrap script
+        cat > bootstrap << EOF
 #!/bin/sh
 set -euo pipefail
-exec ./${SERVICE_NAME} "$@"
+exec ./$service "\$@"
 EOF
-    
-    # Replace placeholder with actual service name
-    sed -i "s/\${SERVICE_NAME}/$service/g" bootstrap
-    chmod +x bootstrap
-    
-    # Step 5: Create deployment ZIP
-    echo -e "${YELLOW}  📦 Creating deployment package...${NC}"
-    ZIP_NAME="${service}-native.zip"
-    zip -r "$ZIP_NAME" bootstrap "$service"
-    
-    # Step 6: Copy to build directory
-    cp "$ZIP_NAME" "$BUILD_DIR/"
-    
-    echo -e "${GREEN}  ✅ Package created: $ZIP_NAME${NC}"
+        chmod +x bootstrap
+        
+        # Create deployment ZIP
+        ZIP_NAME="${service}-native.zip"
+        zip -r "$ZIP_NAME" bootstrap "$service"
+        cp "$ZIP_NAME" "$BUILD_DIR/"
+        echo -e "${GREEN}  ✅ Package created: $ZIP_NAME${NC}"
+    fi
     
     # Return to project root
     cd "$PROJECT_ROOT"

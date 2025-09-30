@@ -1,0 +1,151 @@
+version: '3'
+
+# AWS Lambda Java Template - Extreme DRY Taskfile
+# Uses AWS Lambda containers for consistent native builds
+
+vars:
+  PROJECT_NAME: lambda-java-template
+  AWS_REGION: us-east-1
+  GRAALVM_VERSION: 21.0.2-graalce
+  LAMBDA_CONTAINER: public.ecr.aws/lambda/provided:al2
+  BUILD_DIR: ./build
+
+tasks:
+  default:
+    desc: 🚀 Show available tasks
+    cmds:
+      - task --list
+
+  # 🧹 Cleanup
+  clean:
+    desc: 🧹 Clean all build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - mvn clean -q
+
+  # 🏗️ Native Build (Docker Container - Like CI)
+  native:
+    desc: ⚡ Build GraalVM native executables using AWS Lambda container
+    deps: [clean]
+    cmds:
+      - echo "🚀 Building native executables in AWS Lambda container..."
+      - docker pull {{.LAMBDA_CONTAINER}}
+      - |
+        docker run --rm \
+          --entrypoint="" \
+          -u "$(id -u):$(id -g)" \
+          -v "$(pwd)":/workspace \
+          -w /workspace \
+          {{.LAMBDA_CONTAINER}} \
+          bash -c "
+            yum update -y && \
+            yum install -y tar gzip which unzip zip && \
+            curl -s 'https://get.sdkman.io' | bash && \
+            source ~/.sdkman/bin/sdkman-init.sh && \
+            sdk install java {{.GRAALVM_VERSION}} && \
+            sdk install maven && \
+            export JAVA_HOME=~/.sdkman/candidates/java/current && \
+            export PATH=\$JAVA_HOME/bin:\$PATH && \
+            ./scripts/build.sh
+          "
+
+  # 🏗️ Build JARs only (for testing)
+  jar:
+    desc: 📦 Build JAR packages only
+    cmds:
+      - mvn clean package -DskipTests -q
+
+  # 🧪 Test
+  test:
+    desc: 🧪 Run all tests
+    cmds:
+      - mvn test
+
+  test:unit:
+    desc: 🧪 Run unit tests only
+    cmds:
+      - mvn test -Dtest=*Test
+
+  test:integration:
+    desc: 🧪 Run integration tests only
+    cmds:
+      - mvn test -Dtest=*IntegrationTest
+
+  # 🏗️ Infrastructure
+  tf:init:
+    desc: 🏗️ Initialize Terraform
+    dir: terraform
+    cmds:
+      - terraform init
+
+  tf:plan:
+    desc: 📋 Plan Terraform changes
+    dir: terraform
+    deps: [tf:init]
+    cmds:
+      - terraform plan
+
+  tf:apply:
+    desc: 🚀 Apply Terraform changes
+    dir: terraform
+    deps: [native]
+    cmds:
+      - terraform apply -auto-approve
+
+  tf:destroy:
+    desc: 💥 Destroy infrastructure
+    dir: terraform
+    cmds:
+      - terraform destroy -auto-approve
+
+  tf:validate:
+    desc: ✅ Validate Terraform
+    dir: terraform
+    deps: [tf:init]
+    cmds:
+      - terraform validate
+      - terraform fmt -check
+
+  # 🧪 Infrastructure Testing
+  terratest:
+    desc: 🧪 Run Terratest infrastructure tests
+    dir: infra-tests
+    deps: [tf:apply]
+    cmds:
+      - go mod tidy
+      - go test -v -timeout 15m -run TestLambdaIntegration
+
+  # 🚀 Full Deployment
+  deploy:
+    desc: 🚀 Full deployment (native + infrastructure)
+    cmds:
+      - task: native
+      - task: tf:apply
+
+  deploy:dev:
+    desc: 🚀 Deploy to development
+    env:
+      TF_VAR_environment: dev
+    cmds:
+      - task: deploy
+
+  # 📊 Monitoring
+  logs:
+    desc: 📊 View Lambda logs
+    cmds:
+      - aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/{{.PROJECT_NAME}}" --query 'logGroups[*].logGroupName'
+
+  # 🧹 Complete cleanup
+  nuke:
+    desc: 💥 Complete cleanup (destroy + clean)
+    cmds:
+      - task: tf:destroy
+      - task: clean
+      - docker system prune -f
+
+  # 🏃 Development workflow
+  dev:
+    desc: 🏃 Development workflow (test + native + deploy)
+    cmds:
+      - task: test
+      - task: deploy:dev

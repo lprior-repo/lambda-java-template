@@ -52,12 +52,13 @@ jobs:
           chmod +x scripts/build.sh
           # Use AWS Lambda container for consistent GLIBC compatibility
           docker run --rm \
+            --entrypoint="" \
             -v "$(pwd)":/workspace \
             -w /workspace \
             public.ecr.aws/lambda/provided:al2 \
             bash -c "
               yum update -y && \
-              yum install -y tar gzip which && \
+              yum install -y tar gzip which unzip zip && \
               curl -s 'https://get.sdkman.io' | bash && \
               source ~/.sdkman/bin/sdkman-init.sh && \
               sdk install java 21.0.2-graalce && \
