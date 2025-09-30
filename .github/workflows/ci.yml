@@ -58,7 +58,7 @@ jobs:
             public.ecr.aws/lambda/provided:al2 \
             bash -c "
               yum update -y && \
-              yum install -y tar gzip which unzip zip && \
+              yum install -y tar gzip which unzip zip gcc gcc-c++ glibc-devel zlib-devel && \
               curl -s 'https://get.sdkman.io' | bash && \
               source ~/.sdkman/bin/sdkman-init.sh && \
               sdk install java 21.0.2-graalce && \

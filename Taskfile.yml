@@ -33,13 +33,12 @@ tasks:
       - |
         docker run --rm \
           --entrypoint="" \
-          -u "$(id -u):$(id -g)" \
           -v "$(pwd)":/workspace \
           -w /workspace \
           {{.LAMBDA_CONTAINER}} \
           bash -c "
             yum update -y && \
-            yum install -y tar gzip which unzip zip && \
+            yum install -y tar gzip which unzip zip gcc gcc-c++ glibc-devel zlib-devel && \
             curl -s 'https://get.sdkman.io' | bash && \
             source ~/.sdkman/bin/sdkman-init.sh && \
             sdk install java {{.GRAALVM_VERSION}} && \
